@@ -1,0 +1,5 @@
+error: `#[derive(DomainEvent)]` can only be applied to structs, not enums
+ --> tests/ui/06_derive_on_enum.rs:6:10
+  |
+6 | pub enum UserEvent {
+  |          ^^^^^^^^^

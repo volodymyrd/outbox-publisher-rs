@@ -1,0 +1,5 @@
+error: no field marked `#[event(aggregate_id)]`; exactly one `Uuid` field must be annotated
+ --> tests/ui/03_no_aggregate_id_field.rs:6:12
+  |
+6 | pub struct UserRegistered {
+  |            ^^^^^^^^^^^^^^

@@ -1,0 +1,5 @@
+error: missing required `#[event(kind = "...")]` attribute
+ --> tests/ui/01_missing_kind.rs:6:12
+  |
+6 | pub struct UserRegistered {
+  |            ^^^^^^^^^^^^^^

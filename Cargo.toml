@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/outbox-publisher",
+    "crates/outbox-publisher-derive",
+    "crates/outbox-publisher-sqlx",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Volodymyr Dobrovolskyi"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/volodymyrd/outbox-publisher-rs"
+
+[workspace.dependencies]
+# Internal crates
+outbox-publisher = { path = "crates/outbox-publisher", version = "0.1.0" }
+outbox-publisher-derive = { path = "crates/outbox-publisher-derive", version = "0.1.0" }
+
+# External dependencies
+async-trait = "0.1"
+mockall = "0.13"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = ">=1.20", features = ["full"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["v4", "serde"] }
