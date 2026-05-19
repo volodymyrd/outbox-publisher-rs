@@ -1,2 +1,5 @@
-.DS_Strore
+.DS_Store
 .idea
+.env
+.env.toml
+/target
