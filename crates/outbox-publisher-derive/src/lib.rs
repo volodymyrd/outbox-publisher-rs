@@ -250,8 +250,10 @@ fn is_uuid_type(ty: &Type) -> bool {
     };
     let segs: Vec<&syn::PathSegment> = path.segments.iter().collect();
     match segs.as_slice() {
-        [last] => last.ident == "Uuid",
-        [.., prev, last] => last.ident == "Uuid" && prev.ident == "uuid",
+        // `Uuid`
+        [only] => only.ident == "Uuid",
+        // `uuid::Uuid` or `::uuid::Uuid` (leading_colon is on the Path, not a segment)
+        [crate_seg, ty_seg] => crate_seg.ident == "uuid" && ty_seg.ident == "Uuid",
         _ => false,
     }
 }
