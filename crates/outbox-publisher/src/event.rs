@@ -46,20 +46,20 @@ impl std::fmt::Display for EventId {
 /// let ctx = EventContext::default()
 ///     .for_actor(Uuid::new_v4())
 ///     .with_correlation(Uuid::new_v4());
-/// assert!(ctx.actor_id.is_some());
-/// assert!(ctx.correlation_id.is_some());
-/// assert!(ctx.causation_id.is_none());
+/// assert!(ctx.actor_id().is_some());
+/// assert!(ctx.correlation_id().is_some());
+/// assert!(ctx.causation_id().is_none());
 /// ```
 #[derive(Debug, Clone)]
 pub struct EventContext {
     /// The authenticated user or service that triggered the event.
-    pub actor_id: Option<Uuid>,
+    actor_id: Option<Uuid>,
     /// Groups related events that belong to the same logical request / saga.
-    pub correlation_id: Option<Uuid>,
+    correlation_id: Option<Uuid>,
     /// The event or command that directly caused this event.
-    pub causation_id: Option<Uuid>,
+    causation_id: Option<Uuid>,
     /// Arbitrary structured metadata forwarded verbatim into the outbox row.
-    pub metadata: serde_json::Value,
+    metadata: serde_json::Value,
 }
 
 impl Default for EventContext {
@@ -74,6 +74,26 @@ impl Default for EventContext {
 }
 
 impl EventContext {
+    /// The authenticated user or service that triggered the event.
+    pub fn actor_id(&self) -> Option<Uuid> {
+        self.actor_id
+    }
+
+    /// Groups related events that belong to the same logical request / saga.
+    pub fn correlation_id(&self) -> Option<Uuid> {
+        self.correlation_id
+    }
+
+    /// The event or command that directly caused this event.
+    pub fn causation_id(&self) -> Option<Uuid> {
+        self.causation_id
+    }
+
+    /// Arbitrary structured metadata forwarded verbatim into the outbox row.
+    pub fn metadata(&self) -> &serde_json::Value {
+        &self.metadata
+    }
+
     /// Set the actor (caller identity) for this event.
     pub fn for_actor(mut self, actor_id: Uuid) -> Self {
         self.actor_id = Some(actor_id);
@@ -92,9 +112,14 @@ impl EventContext {
         self
     }
 
-    /// Replace the metadata value (must be a JSON object or `null`).
-    pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
-        self.metadata = metadata;
+    /// Replace the metadata with a JSON object.
+    ///
+    /// The `metadata` column in `outbox_events` is `JSONB`. Accepting only an
+    /// object map (rather than an arbitrary `serde_json::Value`) ensures the
+    /// stored value is always a JSON object, which is what the dispatcher's
+    /// webhook envelope expects.
+    pub fn with_metadata(mut self, metadata: serde_json::Map<String, serde_json::Value>) -> Self {
+        self.metadata = serde_json::Value::Object(metadata);
         self
     }
 }
@@ -121,38 +146,38 @@ mod tests {
     #[test]
     fn event_context_default_has_empty_metadata() {
         let ctx = EventContext::default();
-        assert!(ctx.actor_id.is_none());
-        assert!(ctx.correlation_id.is_none());
-        assert!(ctx.causation_id.is_none());
-        assert_eq!(ctx.metadata, json!({}));
+        assert!(ctx.actor_id().is_none());
+        assert!(ctx.correlation_id().is_none());
+        assert!(ctx.causation_id().is_none());
+        assert_eq!(ctx.metadata(), &json!({}));
     }
 
     #[test]
     fn event_context_for_actor() {
         let actor = Uuid::new_v4();
         let ctx = EventContext::default().for_actor(actor);
-        assert_eq!(ctx.actor_id, Some(actor));
+        assert_eq!(ctx.actor_id(), Some(actor));
     }
 
     #[test]
     fn event_context_with_correlation() {
         let corr = Uuid::new_v4();
         let ctx = EventContext::default().with_correlation(corr);
-        assert_eq!(ctx.correlation_id, Some(corr));
+        assert_eq!(ctx.correlation_id(), Some(corr));
     }
 
     #[test]
     fn event_context_with_causation() {
         let cause = Uuid::new_v4();
         let ctx = EventContext::default().with_causation(cause);
-        assert_eq!(ctx.causation_id, Some(cause));
+        assert_eq!(ctx.causation_id(), Some(cause));
     }
 
     #[test]
     fn event_context_with_metadata() {
-        let meta = json!({"key": "value"});
-        let ctx = EventContext::default().with_metadata(meta.clone());
-        assert_eq!(ctx.metadata, meta);
+        let map = json!({"key": "value"}).as_object().unwrap().clone();
+        let ctx = EventContext::default().with_metadata(map.clone());
+        assert_eq!(ctx.metadata(), &serde_json::Value::Object(map));
     }
 
     #[test]
@@ -160,17 +185,17 @@ mod tests {
         let actor = Uuid::new_v4();
         let corr = Uuid::new_v4();
         let cause = Uuid::new_v4();
-        let meta = json!({"source": "test"});
+        let map = json!({"source": "test"}).as_object().unwrap().clone();
 
         let ctx = EventContext::default()
             .for_actor(actor)
             .with_correlation(corr)
             .with_causation(cause)
-            .with_metadata(meta.clone());
+            .with_metadata(map.clone());
 
-        assert_eq!(ctx.actor_id, Some(actor));
-        assert_eq!(ctx.correlation_id, Some(corr));
-        assert_eq!(ctx.causation_id, Some(cause));
-        assert_eq!(ctx.metadata, meta);
+        assert_eq!(ctx.actor_id(), Some(actor));
+        assert_eq!(ctx.correlation_id(), Some(corr));
+        assert_eq!(ctx.causation_id(), Some(cause));
+        assert_eq!(ctx.metadata(), &serde_json::Value::Object(map));
     }
 }

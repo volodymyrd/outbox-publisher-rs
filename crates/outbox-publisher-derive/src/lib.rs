@@ -176,6 +176,7 @@ fn find_aggregate_id_field(
     let mut found: Vec<(&syn::Field, proc_macro2::TokenStream)> = Vec::new();
 
     for field in &named.named {
+        let mut field_marked = false;
         for attr in &field.attrs {
             if !attr.path().is_ident("event") {
                 continue;
@@ -192,6 +193,13 @@ fn find_aggregate_id_field(
                 }
             })?;
             if is_aggregate_id {
+                if field_marked {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        "`#[event(aggregate_id)]` specified more than once on the same field",
+                    ));
+                }
+                field_marked = true;
                 let ident = field
                     .ident
                     .as_ref()
