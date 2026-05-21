@@ -34,6 +34,10 @@ impl DomainEvent for OrderPlaced {
 
 // A hand-rolled mock that records calls — demonstrates the trait is usable
 // across crate boundaries without a live database.
+//
+// std::sync::Mutex is intentional: the critical section (push/clone) is purely
+// synchronous and never crosses an `.await` point, so the lighter std mutex is
+// correct here (tokio::sync::Mutex would add unnecessary overhead).
 struct RecordingPublisher {
     appended: std::sync::Mutex<Vec<String>>,
 }
@@ -53,8 +57,6 @@ impl RecordingPublisher {
 // A dummy transaction type — no real DB needed for unit tests.
 pub struct NoopTx;
 
-unsafe impl Send for NoopTx {}
-
 impl Publisher for RecordingPublisher {
     type Tx<'a> = NoopTx;
 
@@ -70,7 +72,23 @@ impl Publisher for RecordingPublisher {
     {
         let kind = E::kind().to_owned();
         self.appended.lock().unwrap().push(kind);
-        async { Ok(EventId::from_uuid(Uuid::new_v4())) }
+        async { Ok(EventId::from(Uuid::new_v4())) }
+    }
+
+    fn append_with_id<'a, 'b, E>(
+        &'a self,
+        _tx: &'b mut NoopTx,
+        event_id: EventId,
+        _event: &'b E,
+        _ctx: &'b EventContext,
+    ) -> impl Future<Output = Result<EventId, PublishError>> + Send + 'b
+    where
+        E: DomainEvent + Serialize + Send + Sync,
+        'a: 'b,
+    {
+        let kind = E::kind().to_owned();
+        self.appended.lock().unwrap().push(kind);
+        async move { Ok(event_id) }
     }
 
     fn append_batch<'a, 'b, E>(
@@ -90,11 +108,7 @@ impl Publisher for RecordingPublisher {
                 guard.push(kind.clone());
             }
         }
-        async move {
-            Ok((0..count)
-                .map(|_| EventId::from_uuid(Uuid::new_v4()))
-                .collect())
-        }
+        async move { Ok((0..count).map(|_| EventId::from(Uuid::new_v4())).collect()) }
     }
 }
 
@@ -139,6 +153,23 @@ async fn mock_publisher_append_batch_records_all_events() {
         publisher.recorded(),
         vec!["order.placed@v1", "order.placed@v1"]
     );
+}
+
+#[tokio::test]
+async fn mock_publisher_append_with_id_preserves_event_id() {
+    let publisher = RecordingPublisher::new();
+    let event = OrderPlaced {
+        order_id: Uuid::new_v4(),
+    };
+    let ctx = EventContext::default();
+    let mut tx = NoopTx;
+    let supplied_id = EventId::from(Uuid::new_v4());
+
+    let result = publisher
+        .append_with_id(&mut tx, supplied_id, &event, &ctx)
+        .await;
+    assert_eq!(result.unwrap(), supplied_id);
+    assert_eq!(publisher.recorded(), vec!["order.placed@v1"]);
 }
 
 #[tokio::test]

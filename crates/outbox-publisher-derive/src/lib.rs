@@ -100,8 +100,8 @@ fn expand_domain_event(ast: DeriveInput) -> syn::Result<proc_macro2::TokenStream
 
 /// Parse `kind` and `aggregate` string literals from `#[event(...)]` on the struct.
 fn parse_struct_attrs(ast: &DeriveInput) -> syn::Result<(String, String)> {
-    let mut kind: Option<(String, proc_macro2::TokenStream)> = None;
-    let mut aggregate: Option<(String, proc_macro2::TokenStream)> = None;
+    let mut kind: Option<String> = None;
+    let mut aggregate: Option<String> = None;
 
     for attr in &ast.attrs {
         if !attr.path().is_ident("event") {
@@ -112,29 +112,29 @@ fn parse_struct_attrs(ast: &DeriveInput) -> syn::Result<(String, String)> {
             if meta.path.is_ident("kind") {
                 let value = meta.value()?;
                 let lit: Lit = value.parse()?;
-                let span_ts = quote::quote_spanned!(lit.span() => #lit);
                 if let Lit::Str(s) = &lit {
                     if kind.is_some() {
                         return Err(meta.error("`kind` specified more than once"));
                     }
-                    kind = Some((s.value(), span_ts));
+                    kind = Some(s.value());
                 } else {
                     return Err(meta.error("`kind` must be a string literal"));
                 }
             } else if meta.path.is_ident("aggregate") {
                 let value = meta.value()?;
                 let lit: Lit = value.parse()?;
-                let span_ts = quote::quote_spanned!(lit.span() => #lit);
                 if let Lit::Str(s) = &lit {
                     if aggregate.is_some() {
                         return Err(meta.error("`aggregate` specified more than once"));
                     }
-                    aggregate = Some((s.value(), span_ts));
+                    aggregate = Some(s.value());
                 } else {
                     return Err(meta.error("`aggregate` must be a string literal"));
                 }
             } else if meta.path.is_ident("aggregate_id") {
-                // aggregate_id is a field attribute; silently ignore if encountered at struct level
+                return Err(
+                    meta.error("`aggregate_id` is a field attribute, not a struct attribute")
+                );
             } else {
                 return Err(meta.error("unknown `#[event]` attribute key"));
             }
@@ -142,24 +142,18 @@ fn parse_struct_attrs(ast: &DeriveInput) -> syn::Result<(String, String)> {
         })?;
     }
 
-    let kind_val = match kind {
-        Some((v, _)) => v,
-        None => {
-            return Err(syn::Error::new_spanned(
-                &ast.ident,
-                "missing required `#[event(kind = \"...\")]` attribute",
-            ));
-        }
-    };
-    let aggregate_val = match aggregate {
-        Some((v, _)) => v,
-        None => {
-            return Err(syn::Error::new_spanned(
-                &ast.ident,
-                "missing required `#[event(aggregate = \"...\")]` attribute",
-            ));
-        }
-    };
+    let kind_val = kind.ok_or_else(|| {
+        syn::Error::new_spanned(
+            &ast.ident,
+            "missing required `#[event(kind = \"...\")]` attribute",
+        )
+    })?;
+    let aggregate_val = aggregate.ok_or_else(|| {
+        syn::Error::new_spanned(
+            &ast.ident,
+            "missing required `#[event(aggregate = \"...\")]` attribute",
+        )
+    })?;
 
     Ok((kind_val, aggregate_val))
 }
@@ -192,11 +186,16 @@ fn find_aggregate_id_field(
                     is_aggregate_id = true;
                     Ok(())
                 } else {
-                    Ok(()) // ignore other keys at field level
+                    Err(meta.error(
+                        "unknown `#[event]` key on field; only `aggregate_id` is valid here",
+                    ))
                 }
             })?;
             if is_aggregate_id {
-                let ident = field.ident.as_ref().unwrap();
+                let ident = field
+                    .ident
+                    .as_ref()
+                    .expect("Fields::Named guarantees field.ident is Some");
                 found.push((field, quote!(#ident)));
             }
         }
@@ -216,7 +215,10 @@ fn find_aggregate_id_field(
             // Point the error at the second occurrence.
             let (field, _) = &found[1];
             Err(syn::Error::new_spanned(
-                field.ident.as_ref().unwrap(),
+                field
+                    .ident
+                    .as_ref()
+                    .expect("Fields::Named guarantees field.ident is Some"),
                 "multiple fields marked `#[event(aggregate_id)]`; only one is allowed",
             ))
         }
@@ -238,10 +240,10 @@ fn is_uuid_type(ty: &Type) -> bool {
     let Type::Path(TypePath { qself: None, path }) = ty else {
         return false;
     };
-    let segments: Vec<_> = path.segments.iter().collect();
-    match segments.as_slice() {
-        [seg] => seg.ident == "Uuid",
-        [uuid_seg, id_seg] => uuid_seg.ident == "uuid" && id_seg.ident == "Uuid",
+    let segs: Vec<&syn::PathSegment> = path.segments.iter().collect();
+    match segs.as_slice() {
+        [last] => last.ident == "Uuid",
+        [.., prev, last] => last.ident == "Uuid" && prev.ident == "uuid",
         _ => false,
     }
 }

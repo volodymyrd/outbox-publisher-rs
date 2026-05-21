@@ -20,7 +20,8 @@ outbox-publisher-rs/
 │   ├── outbox-publisher/            # umbrella crate (published to crates.io)
 │   │   ├── src/
 │   │   │   ├── lib.rs               # re-exports per feature flags (sqlx, derive, axum)
-│   │   │   ├── event.rs             # DomainEvent trait, EventContext, EventId
+│   │   │   ├── domain_event.rs      # DomainEvent trait
+│   │   │   ├── event.rs             # EventContext, EventId
 │   │   │   ├── publisher.rs         # Publisher trait with Tx<'a> GAT
 │   │   │   ├── error.rs             # PublishError, VerifyError
 │   │   │   └── webhook/
@@ -72,7 +73,8 @@ DATABASE_URL=postgres://outbox:outbox@localhost:5434/outbox_dispatcher cargo sql
 
 | File                                              | Purpose                                                                    |
 |---------------------------------------------------|----------------------------------------------------------------------------|
-| `crates/outbox-publisher/src/event.rs`            | `DomainEvent` trait, `EventContext`, `EventId`                             |
+| `crates/outbox-publisher/src/domain_event.rs`     | `DomainEvent` trait                                                        |
+| `crates/outbox-publisher/src/event.rs`            | `EventContext`, `EventId`                                                  |
 | `crates/outbox-publisher/src/publisher.rs`        | `Publisher` trait with associated `Tx<'a>` GAT                             |
 | `crates/outbox-publisher/src/error.rs`            | `PublishError`, `VerifyError`                                              |
 | `crates/outbox-publisher/src/webhook/mod.rs`      | `WebhookVerifier`, `WebhookEnvelope<E>`, optional axum extractor           |
@@ -144,7 +146,7 @@ See `TDDs/05-outbox-publisher-tdd.md` §12 for the PR-sized step-by-step plan. S
 
 - No blocking calls inside `async fn` — no sync file I/O, no `std::thread::sleep`, no blocking HTTP clients.
 - Never hold a lock across an `.await` point.
-- Use `tokio::sync` primitives in async code, not `std::sync::Mutex` / `RwLock`.
+- Use `tokio::sync` primitives in async code, not `std::sync::Mutex` / `RwLock` — unless the critical section is purely synchronous and never crosses an `.await` point, in which case `std::sync::Mutex` is correct and lighter.
 
 ### Database
 
@@ -163,7 +165,7 @@ See `TDDs/05-outbox-publisher-tdd.md` §12 for the PR-sized step-by-step plan. S
 
 ### Testing
 
-- Unit tests use `mockall` (`#[automock]` on the `Publisher` trait) — no live DB in unit tests.
+- Unit tests use hand-rolled mocks for the `Publisher` trait — `mockall`'s `#[automock]` does not support GAT-bearing traits (`type Tx<'a>`). See `tests/publisher_mock_test.rs` for the reference pattern.
 - Integration tests use `testcontainers` Postgres with the read-only schema fixture.
 - Cross-language interop tests (Phase 4.4) pull `ghcr.io/volodymyrd/outbox-dispatcher:1.0.0` and exercise publisher → dispatcher → receiver end-to-end.
 - Target >90% coverage per module.

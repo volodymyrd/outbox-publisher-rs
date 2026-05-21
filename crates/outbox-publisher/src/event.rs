@@ -5,17 +5,24 @@ use uuid::Uuid;
 /// Returned by [`crate::publisher::Publisher::append`] and useful for logging
 /// or chaining `causation_id` on downstream events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct EventId(pub Uuid);
+pub struct EventId(Uuid);
 
 impl EventId {
-    /// Wrap an existing [`Uuid`] as an `EventId`.
-    pub fn from_uuid(id: Uuid) -> Self {
-        Self(id)
-    }
-
     /// Return the inner [`Uuid`].
     pub fn into_uuid(self) -> Uuid {
         self.0
+    }
+}
+
+impl From<Uuid> for EventId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<EventId> for Uuid {
+    fn from(id: EventId) -> Self {
+        id.0
     }
 }
 
@@ -100,14 +107,14 @@ mod tests {
     #[test]
     fn event_id_round_trips_uuid() {
         let id = Uuid::new_v4();
-        let event_id = EventId::from_uuid(id);
+        let event_id = EventId::from(id);
         assert_eq!(event_id.into_uuid(), id);
     }
 
     #[test]
     fn event_id_display_matches_uuid() {
         let id = Uuid::new_v4();
-        let event_id = EventId::from_uuid(id);
+        let event_id = EventId::from(id);
         assert_eq!(event_id.to_string(), id.to_string());
     }
 

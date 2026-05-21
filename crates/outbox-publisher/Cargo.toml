@@ -15,14 +15,13 @@ derive = ["dep:outbox-publisher-derive"]
 axum = []
 
 [dependencies]
-outbox-publisher-derive = { workspace = true, optional = true }
 
 async-trait.workspace = true
+outbox-publisher-derive = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-mockall.workspace = true
 tokio.workspace = true
