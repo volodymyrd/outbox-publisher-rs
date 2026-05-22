@@ -44,74 +44,20 @@ use serde::Serialize;
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
-/// A Postgres schema name that has been validated as a safe unquoted identifier.
-///
-/// The name must match `^[A-Za-z_][A-Za-z0-9_]*$`.
-#[derive(Debug, Clone)]
-struct SchemaName(String);
-
-impl SchemaName {
-    fn new(schema: impl Into<String>) -> Result<Self, InvalidSchema> {
-        let schema = schema.into();
-        let valid = !schema.is_empty()
-            && schema
-                .bytes()
-                .next()
-                .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
-            && schema
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'_');
-        if valid {
-            Ok(Self(schema))
-        } else {
-            Err(InvalidSchema(schema))
-        }
-    }
-
-    fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// Error returned when a schema name fails identifier validation.
-#[derive(Debug, thiserror::Error)]
-#[error("invalid Postgres schema identifier: {0:?}")]
-pub struct InvalidSchema(String);
-
 /// SQLx Postgres implementation of [`Publisher`].
 ///
 /// Writes events to `outbox_events` using the caller's transaction. Never
 /// commits or rolls back — transaction lifecycle is the caller's responsibility.
 ///
-/// # Schema
-///
-/// The target schema is `public` by default. Use [`SqlxPublisher::with_schema`]
-/// to override with a validated unquoted Postgres identifier.
-pub struct SqlxPublisher {
-    schema: SchemaName,
-}
+/// The target schema is determined by the connection's `search_path`. To write
+/// to a non-default schema, set `search_path` on the pool or connection before
+/// passing the transaction.
+pub struct SqlxPublisher;
 
 impl SqlxPublisher {
-    /// Create a publisher that writes to the `public` schema.
+    /// Create a new publisher.
     pub fn new() -> Self {
-        Self {
-            // "public" is always a valid identifier; unwrap is safe here.
-            schema: SchemaName::new("public").expect("public is a valid schema name"),
-        }
-    }
-
-    /// Override the Postgres schema (default: `"public"`).
-    ///
-    /// The schema name must match `^[A-Za-z_][A-Za-z0-9_]*$` (standard
-    /// unquoted Postgres identifier). Returns `Err` otherwise.
-    pub fn with_schema(mut self, schema: impl Into<String>) -> Result<Self, InvalidSchema> {
-        self.schema = SchemaName::new(schema)?;
-        Ok(self)
-    }
-
-    /// The Postgres schema this publisher writes to.
-    pub fn schema(&self) -> &str {
-        self.schema.as_str()
+        Self
     }
 }
 

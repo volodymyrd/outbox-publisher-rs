@@ -571,39 +571,6 @@ async fn append_returns_serialization_error_for_failing_serialize() {
     );
 }
 
-// ── Finding 2 — with_schema validation ───────────────────────────────────────
-
-/// `with_schema` rejects invalid identifiers.
-#[test]
-fn with_schema_rejects_invalid_identifiers() {
-    let invalid_cases = [
-        "",
-        "123bad",
-        "has space",
-        "has-dash",
-        "has;semi",
-        "\"quoted\"",
-    ];
-    for case in &invalid_cases {
-        assert!(
-            SqlxPublisher::new().with_schema(*case).is_err(),
-            "expected Err for schema {case:?}"
-        );
-    }
-}
-
-/// `with_schema` accepts valid unquoted Postgres identifiers.
-#[test]
-fn with_schema_accepts_valid_identifiers() {
-    let valid_cases = ["public", "myschema", "_private", "schema_1", "MySchema"];
-    for case in &valid_cases {
-        let publisher = SqlxPublisher::new()
-            .with_schema(*case)
-            .expect("valid identifier");
-        assert_eq!(publisher.schema(), *case);
-    }
-}
-
 /// `append_batch` and N successive `append` calls produce equivalent rows
 /// (same columns, same count).
 #[tokio::test]
