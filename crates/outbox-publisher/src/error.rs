@@ -4,6 +4,9 @@ pub enum PublishError {
     /// The caller-supplied `event_id` already exists in the outbox.
     #[error("duplicate event id")]
     DuplicateEventId,
+    /// `EventContext::callbacks` was empty; the schema requires at least one entry.
+    #[error("event context has no callbacks")]
+    MissingCallbacks,
     /// A database-level error occurred while inserting the outbox row.
     #[error("database error")]
     Database(#[source] Box<dyn std::error::Error + Send + Sync>),
@@ -41,6 +44,14 @@ mod tests {
         assert_eq!(
             PublishError::DuplicateEventId.to_string(),
             "duplicate event id"
+        );
+    }
+
+    #[test]
+    fn publish_error_missing_callbacks_display() {
+        assert_eq!(
+            PublishError::MissingCallbacks.to_string(),
+            "event context has no callbacks"
         );
     }
 

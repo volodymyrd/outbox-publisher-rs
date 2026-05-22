@@ -44,6 +44,40 @@ use serde::Serialize;
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
+/// A Postgres schema name that has been validated as a safe unquoted identifier.
+///
+/// The name must match `^[A-Za-z_][A-Za-z0-9_]*$`.
+#[derive(Debug, Clone)]
+struct SchemaName(String);
+
+impl SchemaName {
+    fn new(schema: impl Into<String>) -> Result<Self, InvalidSchema> {
+        let schema = schema.into();
+        let valid = !schema.is_empty()
+            && schema
+                .bytes()
+                .next()
+                .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+            && schema
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_');
+        if valid {
+            Ok(Self(schema))
+        } else {
+            Err(InvalidSchema(schema))
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Error returned when a schema name fails identifier validation.
+#[derive(Debug, thiserror::Error)]
+#[error("invalid Postgres schema identifier: {0:?}")]
+pub struct InvalidSchema(String);
+
 /// SQLx Postgres implementation of [`Publisher`].
 ///
 /// Writes events to `outbox_events` using the caller's transaction. Never
@@ -52,28 +86,32 @@ use uuid::Uuid;
 /// # Schema
 ///
 /// The target schema is `public` by default. Use [`SqlxPublisher::with_schema`]
-/// to override.
+/// to override with a validated unquoted Postgres identifier.
 pub struct SqlxPublisher {
-    schema: String,
+    schema: SchemaName,
 }
 
 impl SqlxPublisher {
     /// Create a publisher that writes to the `public` schema.
     pub fn new() -> Self {
         Self {
-            schema: "public".to_owned(),
+            // "public" is always a valid identifier; unwrap is safe here.
+            schema: SchemaName::new("public").expect("public is a valid schema name"),
         }
     }
 
     /// Override the Postgres schema (default: `"public"`).
-    pub fn with_schema(mut self, schema: impl Into<String>) -> Self {
-        self.schema = schema.into();
-        self
+    ///
+    /// The schema name must match `^[A-Za-z_][A-Za-z0-9_]*$` (standard
+    /// unquoted Postgres identifier). Returns `Err` otherwise.
+    pub fn with_schema(mut self, schema: impl Into<String>) -> Result<Self, InvalidSchema> {
+        self.schema = SchemaName::new(schema)?;
+        Ok(self)
     }
 
     /// The Postgres schema this publisher writes to.
     pub fn schema(&self) -> &str {
-        &self.schema
+        self.schema.as_str()
     }
 }
 
@@ -86,18 +124,18 @@ impl Default for SqlxPublisher {
 impl Publisher for SqlxPublisher {
     type Tx<'a> = Transaction<'a, Postgres>;
 
-    fn append<'a, 'b, E>(
+    async fn append<'a, 'b, E>(
         &'a self,
         tx: &'b mut Self::Tx<'a>,
         event: &'b E,
         ctx: &'b EventContext,
-    ) -> impl std::future::Future<Output = Result<EventId, PublishError>> + Send + 'b
+    ) -> Result<EventId, PublishError>
     where
         E: DomainEvent + Serialize + Send + Sync,
         'a: 'b,
     {
         let event_id = Uuid::new_v4();
-        async move { self.insert(tx, event_id, event, ctx).await }
+        self.insert(tx, event_id, event, ctx).await
     }
 
     async fn append_with_id<'a, 'b, E>(
@@ -139,30 +177,33 @@ impl SqlxPublisher {
     where
         E: DomainEvent + Serialize,
     {
-        let payload = serde_json::to_value(event)?;
-        let metadata = serde_json::Value::Object(ctx.metadata().clone());
-        let callbacks = serde_json::Value::Array(ctx.callbacks().to_vec());
-        let table = format!("{}.outbox_events", self.schema);
+        if ctx.callbacks().is_empty() {
+            return Err(PublishError::MissingCallbacks);
+        }
 
-        let result = sqlx::query(&format!(
+        let payload = serde_json::to_value(event)?;
+        let metadata = serde_json::to_value(ctx.metadata())?;
+        let callbacks = serde_json::to_value(ctx.callbacks())?;
+
+        let result = sqlx::query!(
             r#"
-            INSERT INTO {table}
+            INSERT INTO outbox_events
                 (event_id, kind, aggregate_type, aggregate_id,
                  payload, metadata, callbacks,
                  actor_id, correlation_id, causation_id)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             "#,
-        ))
-        .bind(event_id)
-        .bind(E::kind())
-        .bind(E::aggregate_type())
-        .bind(event.aggregate_id())
-        .bind(payload)
-        .bind(metadata)
-        .bind(callbacks)
-        .bind(ctx.actor_id())
-        .bind(ctx.correlation_id())
-        .bind(ctx.causation_id())
+            event_id,
+            E::kind(),
+            E::aggregate_type(),
+            event.aggregate_id(),
+            payload,
+            metadata,
+            callbacks,
+            ctx.actor_id(),
+            ctx.correlation_id(),
+            ctx.causation_id(),
+        )
         .execute(&mut **tx)
         .await;
 
@@ -188,6 +229,12 @@ impl SqlxPublisher {
             return Ok(vec![]);
         }
 
+        for (_, ctx) in events {
+            if ctx.callbacks().is_empty() {
+                return Err(PublishError::MissingCallbacks);
+            }
+        }
+
         let len = events.len();
         let mut event_ids: Vec<Uuid> = Vec::with_capacity(len);
         let mut kinds: Vec<&str> = Vec::with_capacity(len);
@@ -203,23 +250,23 @@ impl SqlxPublisher {
         for (event, ctx) in events {
             let event_id = Uuid::new_v4();
             let payload = serde_json::to_value(event)?;
+            let metadata = serde_json::to_value(ctx.metadata())?;
+            let callbacks = serde_json::to_value(ctx.callbacks())?;
             event_ids.push(event_id);
             kinds.push(E::kind());
             aggregate_types.push(E::aggregate_type());
             aggregate_ids.push(event.aggregate_id());
             payloads.push(payload);
-            metadatas.push(serde_json::Value::Object(ctx.metadata().clone()));
-            callbacks_list.push(serde_json::Value::Array(ctx.callbacks().to_vec()));
+            metadatas.push(metadata);
+            callbacks_list.push(callbacks);
             actor_ids.push(ctx.actor_id());
             correlation_ids.push(ctx.correlation_id());
             causation_ids.push(ctx.causation_id());
         }
 
-        let table = format!("{}.outbox_events", self.schema);
-
-        let result = sqlx::query(&format!(
+        let result = sqlx::query!(
             r#"
-            INSERT INTO {table}
+            INSERT INTO outbox_events
                 (event_id, kind, aggregate_type, aggregate_id,
                  payload, metadata, callbacks,
                  actor_id, correlation_id, causation_id)
@@ -229,17 +276,17 @@ impl SqlxPublisher {
                 $8::uuid[], $9::uuid[], $10::uuid[]
             )
             "#,
-        ))
-        .bind(&event_ids)
-        .bind(&kinds)
-        .bind(&aggregate_types)
-        .bind(&aggregate_ids)
-        .bind(&payloads)
-        .bind(&metadatas)
-        .bind(&callbacks_list)
-        .bind(&actor_ids)
-        .bind(&correlation_ids)
-        .bind(&causation_ids)
+            &event_ids as &[Uuid],
+            &kinds as &[&str],
+            &aggregate_types as &[&str],
+            &aggregate_ids as &[Uuid],
+            &payloads as &[serde_json::Value],
+            &metadatas as &[serde_json::Value],
+            &callbacks_list as &[serde_json::Value],
+            &actor_ids as &[Option<Uuid>],
+            &correlation_ids as &[Option<Uuid>],
+            &causation_ids as &[Option<Uuid>],
+        )
         .execute(&mut **tx)
         .await;
 
