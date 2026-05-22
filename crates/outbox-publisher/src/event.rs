@@ -35,13 +35,18 @@ impl std::fmt::Display for EventId {
 /// Request-level metadata carried into the outbox row alongside the event payload.
 ///
 /// Build with the fluent builder methods; `EventContext::default()` produces an
-/// instance with all optional fields set to `None` and `metadata` set to `{}`.
+/// instance with all optional fields set to `None`, `metadata` set to `{}`, and
+/// `callbacks` set to an empty array.
+///
+/// **Note:** the `outbox_events` schema requires at least one callback entry.
+/// Always call [`EventContext::with_callbacks`] before passing the context to a
+/// publisher, otherwise the insert will be rejected by the database constraint.
 ///
 /// # Example
 ///
 /// ```
 /// use outbox_publisher::event::EventContext;
-/// use serde_json::Map;
+/// use serde_json::{Map, json};
 /// use uuid::Uuid;
 ///
 /// let mut metadata = Map::new();
@@ -50,11 +55,13 @@ impl std::fmt::Display for EventId {
 /// let ctx = EventContext::default()
 ///     .for_actor(Uuid::new_v4())
 ///     .with_correlation(Uuid::new_v4())
-///     .with_metadata(metadata);
+///     .with_metadata(metadata)
+///     .with_callbacks(vec![json!({"name": "welcome_email", "url": "https://example.com/hook"})]);
 /// assert!(ctx.actor_id().is_some());
 /// assert!(ctx.correlation_id().is_some());
 /// assert!(ctx.causation_id().is_none());
 /// assert_eq!(ctx.metadata().get("source").and_then(|v| v.as_str()), Some("signup-form"));
+/// assert_eq!(ctx.callbacks().len(), 1);
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct EventContext {
@@ -66,6 +73,9 @@ pub struct EventContext {
     causation_id: Option<Uuid>,
     /// Arbitrary structured metadata forwarded verbatim into the outbox row.
     metadata: serde_json::Map<String, serde_json::Value>,
+    /// Delivery targets for this event (e.g. webhook URLs). At least one entry
+    /// is required by the `outbox_events` schema constraint.
+    callbacks: Vec<serde_json::Value>,
 }
 
 impl EventContext {
@@ -118,6 +128,21 @@ impl EventContext {
     /// webhook envelope expects.
     pub fn with_metadata(mut self, metadata: serde_json::Map<String, serde_json::Value>) -> Self {
         self.metadata = metadata;
+        self
+    }
+
+    /// Delivery targets for this event.
+    ///
+    /// Each entry is a JSON object describing a webhook target (at minimum
+    /// `"name"` and `"url"` fields). The `outbox_events` schema requires at
+    /// least one entry.
+    pub fn callbacks(&self) -> &[serde_json::Value] {
+        &self.callbacks
+    }
+
+    /// Set the delivery targets for this event.
+    pub fn with_callbacks(mut self, callbacks: Vec<serde_json::Value>) -> Self {
+        self.callbacks = callbacks;
         self
     }
 }
@@ -179,21 +204,37 @@ mod tests {
     }
 
     #[test]
+    fn event_context_default_has_empty_callbacks() {
+        let ctx = EventContext::default();
+        assert!(ctx.callbacks().is_empty());
+    }
+
+    #[test]
+    fn event_context_with_callbacks() {
+        let cb = json!({"name": "notify", "url": "https://example.com/hook"});
+        let ctx = EventContext::default().with_callbacks(vec![cb.clone()]);
+        assert_eq!(ctx.callbacks(), &[cb]);
+    }
+
+    #[test]
     fn event_context_builder_chain() {
         let actor = Uuid::new_v4();
         let corr = Uuid::new_v4();
         let cause = Uuid::new_v4();
         let map = json!({"source": "test"}).as_object().unwrap().clone();
+        let cb = json!({"name": "notify", "url": "https://example.com/hook"});
 
         let ctx = EventContext::default()
             .for_actor(actor)
             .with_correlation(corr)
             .with_causation(cause)
-            .with_metadata(map.clone());
+            .with_metadata(map.clone())
+            .with_callbacks(vec![cb.clone()]);
 
         assert_eq!(ctx.actor_id(), Some(actor));
         assert_eq!(ctx.correlation_id(), Some(corr));
         assert_eq!(ctx.causation_id(), Some(cause));
         assert_eq!(ctx.metadata(), &map);
+        assert_eq!(ctx.callbacks(), &[cb]);
     }
 }
