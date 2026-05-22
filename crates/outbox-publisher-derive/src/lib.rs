@@ -184,6 +184,11 @@ fn find_aggregate_id_field(
             let mut is_aggregate_id = false;
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("aggregate_id") {
+                    if is_aggregate_id {
+                        return Err(meta.error(
+                            "`aggregate_id` specified more than once in the same `#[event(...)]`",
+                        ));
+                    }
                     is_aggregate_id = true;
                     Ok(())
                 } else {

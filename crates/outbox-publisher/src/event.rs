@@ -59,7 +59,7 @@ pub struct EventContext {
     /// The event or command that directly caused this event.
     causation_id: Option<Uuid>,
     /// Arbitrary structured metadata forwarded verbatim into the outbox row.
-    metadata: serde_json::Value,
+    metadata: serde_json::Map<String, serde_json::Value>,
 }
 
 impl Default for EventContext {
@@ -68,7 +68,7 @@ impl Default for EventContext {
             actor_id: None,
             correlation_id: None,
             causation_id: None,
-            metadata: serde_json::Value::Object(serde_json::Map::new()),
+            metadata: serde_json::Map::new(),
         }
     }
 }
@@ -90,7 +90,10 @@ impl EventContext {
     }
 
     /// Arbitrary structured metadata forwarded verbatim into the outbox row.
-    pub fn metadata(&self) -> &serde_json::Value {
+    ///
+    /// Always a JSON object — `Default` produces `{}` and `with_metadata` only
+    /// accepts a `Map`, so callers can rely on this without re-checking.
+    pub fn metadata(&self) -> &serde_json::Map<String, serde_json::Value> {
         &self.metadata
     }
 
@@ -119,7 +122,7 @@ impl EventContext {
     /// stored value is always a JSON object, which is what the dispatcher's
     /// webhook envelope expects.
     pub fn with_metadata(mut self, metadata: serde_json::Map<String, serde_json::Value>) -> Self {
-        self.metadata = serde_json::Value::Object(metadata);
+        self.metadata = metadata;
         self
     }
 }
@@ -149,7 +152,7 @@ mod tests {
         assert!(ctx.actor_id().is_none());
         assert!(ctx.correlation_id().is_none());
         assert!(ctx.causation_id().is_none());
-        assert_eq!(ctx.metadata(), &json!({}));
+        assert_eq!(ctx.metadata(), &serde_json::Map::new());
     }
 
     #[test]
@@ -177,7 +180,7 @@ mod tests {
     fn event_context_with_metadata() {
         let map = json!({"key": "value"}).as_object().unwrap().clone();
         let ctx = EventContext::default().with_metadata(map.clone());
-        assert_eq!(ctx.metadata(), &serde_json::Value::Object(map));
+        assert_eq!(ctx.metadata(), &map);
     }
 
     #[test]
@@ -196,6 +199,6 @@ mod tests {
         assert_eq!(ctx.actor_id(), Some(actor));
         assert_eq!(ctx.correlation_id(), Some(corr));
         assert_eq!(ctx.causation_id(), Some(cause));
-        assert_eq!(ctx.metadata(), &serde_json::Value::Object(map));
+        assert_eq!(ctx.metadata(), &map);
     }
 }
