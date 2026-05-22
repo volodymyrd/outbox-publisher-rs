@@ -1,0 +1,14 @@
+[package]
+name = "outbox-publisher-sqlx"
+description = "SQLx Postgres adapter for outbox-publisher."
+keywords = ["outbox", "sqlx", "postgres"]
+categories = ["database"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+outbox-publisher.workspace = true
+

@@ -1,0 +1,5 @@
+error: `aggregate` must not be empty
+ --> tests/ui/12_empty_aggregate.rs:5:38
+  |
+5 | #[event(kind = "user.registered@v1", aggregate = "")]
+  |                                      ^^^^^^^^^^^^^^

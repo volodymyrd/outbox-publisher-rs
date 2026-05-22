@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/outbox-publisher",
+    "crates/outbox-publisher-derive",
+    "crates/outbox-publisher-sqlx",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Volodymyr Dobrovolskyi"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/volodymyrd/outbox-publisher-rs"
+
+[workspace.dependencies]
+
+# Internal crates
+outbox-publisher = { path = "crates/outbox-publisher", version = "0.1.0" }
+outbox-publisher-derive = { path = "crates/outbox-publisher-derive", version = "0.1.0" }
+proc-macro2 = "1"
+quote = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+syn = { version = "2", features = ["full"] }
+thiserror = "2"
+tokio = { version = "1.20", features = ["rt-multi-thread", "macros"] }
+uuid = { version = "1", features = ["v4", "serde"] }

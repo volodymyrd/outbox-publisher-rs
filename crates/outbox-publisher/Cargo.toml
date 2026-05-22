@@ -1,0 +1,29 @@
+[package]
+name = "outbox-publisher"
+description = "Write domain events to a Postgres outbox table atomically, plus HMAC webhook verification helpers."
+keywords = ["outbox", "event", "postgres", "webhook"]
+categories = ["database"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+derive = ["dep:outbox-publisher-derive"]
+# sqlx: reserved for the Phase 2 SqlxPublisher adapter; activates no code yet.
+sqlx = []
+# axum: reserved for the Phase 3 axum extractor; activates no code yet.
+axum = []
+
+[dependencies]
+
+outbox-publisher-derive = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

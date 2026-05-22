@@ -1,0 +1,5 @@
+error: `#[event(aggregate_id)]` specified more than once on the same field
+ --> tests/ui/09_duplicate_aggregate_id_on_same_field.rs:8:5
+  |
+8 |     #[event(aggregate_id)]
+  |     ^^^^^^^^^^^^^^^^^^^^^^

@@ -1,0 +1,5 @@
+error: `aggregate_id` is a field attribute, not a struct attribute
+ --> tests/ui/07_aggregate_id_at_struct_level.rs:5:58
+  |
+5 | #[event(kind = "user.registered@v1", aggregate = "user", aggregate_id)]
+  |                                                          ^^^^^^^^^^^^

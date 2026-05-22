@@ -1,0 +1,5 @@
+error: multiple fields marked `#[event(aggregate_id)]`; only one is allowed
+  --> tests/ui/04_multiple_aggregate_id_fields.rs:10:9
+   |
+10 |     pub another_id: Uuid,
+   |         ^^^^^^^^^^

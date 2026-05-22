@@ -1,0 +1,5 @@
+error: `#[event(aggregate_id)]` field must be of type `Uuid`
+ --> tests/ui/05_non_uuid_aggregate_id.rs:7:18
+  |
+7 |     pub user_id: String,
+  |                  ^^^^^^

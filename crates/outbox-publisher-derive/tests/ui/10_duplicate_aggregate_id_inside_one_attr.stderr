@@ -1,0 +1,5 @@
+error: `aggregate_id` specified more than once in the same `#[event(...)]`
+ --> tests/ui/10_duplicate_aggregate_id_inside_one_attr.rs:7:27
+  |
+7 |     #[event(aggregate_id, aggregate_id)]
+  |                           ^^^^^^^^^^^^

@@ -8,7 +8,7 @@ Design document: `../TDDs/05-outbox-publisher-tdd.md`. The step-by-step build pl
 
 ## Status
 
-Early scaffolding. Only this CLAUDE.md, `README.md`, `.gitignore`, and the review command exist; the workspace and crates listed below are established by **Step 1.1** of TDD §12. Until that lands, commands referencing crates (e.g. `cargo check --workspace`) will not work yet.
+Phase 1 is implemented: workspace, core types, `DomainEvent`/`Publisher` traits, and the `#[derive(DomainEvent)]` proc-macro all live under `crates/`. Phase 2 (`SqlxPublisher`) and Phase 3 (webhook verification) are next per TDD §12.
 
 ## Workspace layout (target — established by Step 1.1)
 
@@ -20,7 +20,8 @@ outbox-publisher-rs/
 │   ├── outbox-publisher/            # umbrella crate (published to crates.io)
 │   │   ├── src/
 │   │   │   ├── lib.rs               # re-exports per feature flags (sqlx, derive, axum)
-│   │   │   ├── event.rs             # DomainEvent trait, EventContext, EventId
+│   │   │   ├── domain_event.rs      # DomainEvent trait
+│   │   │   ├── event.rs             # EventContext, EventId
 │   │   │   ├── publisher.rs         # Publisher trait with Tx<'a> GAT
 │   │   │   ├── error.rs             # PublishError, VerifyError
 │   │   │   └── webhook/
@@ -62,6 +63,9 @@ If a `Cargo.toml` dependency was added or removed:
 cargo sort --workspace
 ```
 
+`Cargo.lock` is committed to keep CI builds reproducible. Update it with
+`cargo update -p <crate>` for targeted bumps rather than a blanket `cargo update`.
+
 If a sqlx query macro was added or changed:
 
 ```bash
@@ -72,7 +76,8 @@ DATABASE_URL=postgres://outbox:outbox@localhost:5434/outbox_dispatcher cargo sql
 
 | File                                              | Purpose                                                                    |
 |---------------------------------------------------|----------------------------------------------------------------------------|
-| `crates/outbox-publisher/src/event.rs`            | `DomainEvent` trait, `EventContext`, `EventId`                             |
+| `crates/outbox-publisher/src/domain_event.rs`     | `DomainEvent` trait                                                        |
+| `crates/outbox-publisher/src/event.rs`            | `EventContext`, `EventId`                                                  |
 | `crates/outbox-publisher/src/publisher.rs`        | `Publisher` trait with associated `Tx<'a>` GAT                             |
 | `crates/outbox-publisher/src/error.rs`            | `PublishError`, `VerifyError`                                              |
 | `crates/outbox-publisher/src/webhook/mod.rs`      | `WebhookVerifier`, `WebhookEnvelope<E>`, optional axum extractor           |
@@ -111,7 +116,7 @@ See `TDDs/05-outbox-publisher-tdd.md` §12 for the PR-sized step-by-step plan. S
 
 | Phase | Status   | Description                                                                       |
 |-------|----------|-----------------------------------------------------------------------------------|
-| 1     | TODO     | Workspace, core types, `DomainEvent` + `Publisher` traits, derive macro           |
+| 1     | DONE     | Workspace, core types, `DomainEvent` + `Publisher` traits, derive macro           |
 | 2     | TODO     | `SqlxPublisher`; `append`, `append_with_id`, `append_batch`                       |
 | 3     | TODO     | `WebhookVerifier`, `WebhookEnvelope`, constant-time verify, axum extractor        |
 | 4     | TODO     | Examples, docs, CI, cross-language interop (blocked on dispatcher v1.0.0), publish |
@@ -144,7 +149,7 @@ See `TDDs/05-outbox-publisher-tdd.md` §12 for the PR-sized step-by-step plan. S
 
 - No blocking calls inside `async fn` — no sync file I/O, no `std::thread::sleep`, no blocking HTTP clients.
 - Never hold a lock across an `.await` point.
-- Use `tokio::sync` primitives in async code, not `std::sync::Mutex` / `RwLock`.
+- Use `tokio::sync` primitives in async code, not `std::sync::Mutex` / `RwLock` — unless the critical section is purely synchronous and never crosses an `.await` point, in which case `std::sync::Mutex` is correct and lighter.
 
 ### Database
 
@@ -163,7 +168,7 @@ See `TDDs/05-outbox-publisher-tdd.md` §12 for the PR-sized step-by-step plan. S
 
 ### Testing
 
-- Unit tests use `mockall` (`#[automock]` on the `Publisher` trait) — no live DB in unit tests.
+- Unit tests use hand-rolled mocks for the `Publisher` trait — `mockall`'s `#[automock]` does not support GAT-bearing traits (`type Tx<'a>`). See `tests/publisher_mock_test.rs` for the reference pattern.
 - Integration tests use `testcontainers` Postgres with the read-only schema fixture.
 - Cross-language interop tests (Phase 4.4) pull `ghcr.io/volodymyrd/outbox-dispatcher:1.0.0` and exercise publisher → dispatcher → receiver end-to-end.
 - Target >90% coverage per module.

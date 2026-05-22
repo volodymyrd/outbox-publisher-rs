@@ -1,0 +1,5 @@
+error: `#[event(aggregate_id)]` field must be of type `Uuid`
+  --> tests/ui/13_uuid_with_generic_args.rs:12:18
+   |
+12 |     pub user_id: Uuid<()>,
+   |                  ^^^^^^^^

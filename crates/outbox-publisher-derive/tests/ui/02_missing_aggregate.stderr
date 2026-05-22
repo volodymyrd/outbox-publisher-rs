@@ -1,0 +1,5 @@
+error: missing required `#[event(aggregate = "...")]` attribute
+ --> tests/ui/02_missing_aggregate.rs:6:12
+  |
+6 | pub struct UserRegistered {
+  |            ^^^^^^^^^^^^^^

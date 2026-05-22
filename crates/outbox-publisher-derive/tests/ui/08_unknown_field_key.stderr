@@ -1,0 +1,5 @@
+error: unknown `#[event]` key on field; only `aggregate_id` is valid here
+ --> tests/ui/08_unknown_field_key.rs:7:13
+  |
+7 |     #[event(typo)]
+  |             ^^^^
