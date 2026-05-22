@@ -1,0 +1,5 @@
+error: `kind` must not be empty
+ --> tests/ui/11_empty_kind.rs:5:9
+  |
+5 | #[event(kind = "", aggregate = "user")]
+  |         ^^^^^^^^^

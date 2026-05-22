@@ -116,7 +116,11 @@ fn parse_struct_attrs(ast: &DeriveInput) -> syn::Result<(String, String)> {
                     if kind.is_some() {
                         return Err(meta.error("`kind` specified more than once"));
                     }
-                    kind = Some(s.value());
+                    let v = s.value();
+                    if v.is_empty() {
+                        return Err(meta.error("`kind` must not be empty"));
+                    }
+                    kind = Some(v);
                 } else {
                     return Err(meta.error("`kind` must be a string literal"));
                 }
@@ -127,7 +131,11 @@ fn parse_struct_attrs(ast: &DeriveInput) -> syn::Result<(String, String)> {
                     if aggregate.is_some() {
                         return Err(meta.error("`aggregate` specified more than once"));
                     }
-                    aggregate = Some(s.value());
+                    let v = s.value();
+                    if v.is_empty() {
+                        return Err(meta.error("`aggregate` must not be empty"));
+                    }
+                    aggregate = Some(v);
                 } else {
                     return Err(meta.error("`aggregate` must be a string literal"));
                 }

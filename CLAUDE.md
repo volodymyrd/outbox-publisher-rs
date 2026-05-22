@@ -63,6 +63,9 @@ If a `Cargo.toml` dependency was added or removed:
 cargo sort --workspace
 ```
 
+`Cargo.lock` is committed to keep CI builds reproducible. Update it with
+`cargo update -p <crate>` for targeted bumps rather than a blanket `cargo update`.
+
 If a sqlx query macro was added or changed:
 
 ```bash

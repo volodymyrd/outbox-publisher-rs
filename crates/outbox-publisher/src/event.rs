@@ -56,7 +56,7 @@ impl std::fmt::Display for EventId {
 /// assert!(ctx.causation_id().is_none());
 /// assert_eq!(ctx.metadata().get("source").and_then(|v| v.as_str()), Some("signup-form"));
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct EventContext {
     /// The authenticated user or service that triggered the event.
     actor_id: Option<Uuid>,
@@ -66,17 +66,6 @@ pub struct EventContext {
     causation_id: Option<Uuid>,
     /// Arbitrary structured metadata forwarded verbatim into the outbox row.
     metadata: serde_json::Map<String, serde_json::Value>,
-}
-
-impl Default for EventContext {
-    fn default() -> Self {
-        Self {
-            actor_id: None,
-            correlation_id: None,
-            causation_id: None,
-            metadata: serde_json::Map::new(),
-        }
-    }
 }
 
 impl EventContext {

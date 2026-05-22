@@ -5,7 +5,7 @@ pub enum PublishError {
     #[error("duplicate event id")]
     DuplicateEventId,
     /// A database-level error occurred while inserting the outbox row.
-    #[error("database error: {0}")]
+    #[error("database error")]
     Database(#[source] Box<dyn std::error::Error + Send + Sync>),
     /// The event payload could not be serialized to JSON.
     #[error("payload serialization failed: {0}")]
@@ -45,11 +45,13 @@ mod tests {
     }
 
     #[test]
-    fn publish_error_database_display() {
+    fn publish_error_database_carries_source() {
+        use std::error::Error;
         let cause: Box<dyn std::error::Error + Send + Sync> =
             Box::new(std::io::Error::other("connection refused"));
         let err = PublishError::Database(cause);
-        assert_eq!(err.to_string(), "database error: connection refused");
+        assert_eq!(err.to_string(), "database error");
+        assert_eq!(err.source().unwrap().to_string(), "connection refused",);
     }
 
     #[test]

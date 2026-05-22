@@ -57,6 +57,10 @@ impl RecordingPublisher {
 // A dummy transaction type — no real DB needed for unit tests.
 pub struct NoopTx;
 
+// The impl below uses the explicit `fn ... -> impl Future` form intentionally:
+// it mirrors exactly what a real adapter (e.g. SqlxPublisher) must write, making
+// this the canonical reference pattern for implementing the Publisher trait.
+#[allow(clippy::manual_async_fn)]
 impl Publisher for RecordingPublisher {
     type Tx<'a> = NoopTx;
 
@@ -70,9 +74,10 @@ impl Publisher for RecordingPublisher {
         E: DomainEvent + Serialize + Send + Sync,
         'a: 'b,
     {
-        let kind = E::kind().to_owned();
-        self.appended.lock().unwrap().push(kind);
-        async { Ok(EventId::from(Uuid::new_v4())) }
+        async move {
+            self.appended.lock().unwrap().push(E::kind().to_owned());
+            Ok(EventId::from(Uuid::new_v4()))
+        }
     }
 
     fn append_with_id<'a, 'b, E>(
@@ -86,9 +91,10 @@ impl Publisher for RecordingPublisher {
         E: DomainEvent + Serialize + Send + Sync,
         'a: 'b,
     {
-        let kind = E::kind().to_owned();
-        self.appended.lock().unwrap().push(kind);
-        async move { Ok(event_id) }
+        async move {
+            self.appended.lock().unwrap().push(E::kind().to_owned());
+            Ok(event_id)
+        }
     }
 
     fn append_batch<'a, 'b, E>(
@@ -100,15 +106,18 @@ impl Publisher for RecordingPublisher {
         E: DomainEvent + Serialize + Send + Sync,
         'a: 'b,
     {
-        let count = events.len();
-        {
+        async move {
             let kind = E::kind().to_owned();
             let mut guard = self.appended.lock().unwrap();
-            for _ in 0..count {
-                guard.push(kind.clone());
-            }
+            let ids = events
+                .iter()
+                .map(|_| {
+                    guard.push(kind.clone());
+                    EventId::from(Uuid::new_v4())
+                })
+                .collect();
+            Ok(ids)
         }
-        async move { Ok((0..count).map(|_| EventId::from(Uuid::new_v4())).collect()) }
     }
 }
 
@@ -200,4 +209,18 @@ async fn mock_publisher_append_returns_unique_event_ids() {
         .unwrap();
 
     assert_ne!(id1.into_uuid(), id2.into_uuid());
+}
+
+#[tokio::test]
+async fn mock_publisher_does_not_record_until_awaited() {
+    let publisher = RecordingPublisher::new();
+    let event = OrderPlaced {
+        order_id: Uuid::new_v4(),
+    };
+    let ctx = EventContext::default();
+    let mut tx = NoopTx;
+
+    // Construct the future but do not poll it.
+    let _fut = publisher.append(&mut tx, &event, &ctx);
+    assert!(publisher.recorded().is_empty());
 }

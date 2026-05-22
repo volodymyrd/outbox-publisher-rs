@@ -12,6 +12,9 @@ repository.workspace = true
 [features]
 default = []
 derive = ["dep:outbox-publisher-derive"]
+# sqlx: reserved for the Phase 2 SqlxPublisher adapter; activates no code yet.
+sqlx = []
+# axum: reserved for the Phase 3 axum extractor; activates no code yet.
 axum = []
 
 [dependencies]
