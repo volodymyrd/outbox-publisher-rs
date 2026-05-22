@@ -8,7 +8,7 @@ Design document: `../TDDs/05-outbox-publisher-tdd.md`. The step-by-step build pl
 
 ## Status
 
-Early scaffolding. Only this CLAUDE.md, `README.md`, `.gitignore`, and the review command exist; the workspace and crates listed below are established by **Step 1.1** of TDD §12. Until that lands, commands referencing crates (e.g. `cargo check --workspace`) will not work yet.
+Phase 1 is implemented: workspace, core types, `DomainEvent`/`Publisher` traits, and the `#[derive(DomainEvent)]` proc-macro all live under `crates/`. Phase 2 (`SqlxPublisher`) and Phase 3 (webhook verification) are next per TDD §12.
 
 ## Workspace layout (target — established by Step 1.1)
 
@@ -116,7 +116,7 @@ See `TDDs/05-outbox-publisher-tdd.md` §12 for the PR-sized step-by-step plan. S
 
 | Phase | Status   | Description                                                                       |
 |-------|----------|-----------------------------------------------------------------------------------|
-| 1     | TODO     | Workspace, core types, `DomainEvent` + `Publisher` traits, derive macro           |
+| 1     | DONE     | Workspace, core types, `DomainEvent` + `Publisher` traits, derive macro           |
 | 2     | TODO     | `SqlxPublisher`; `append`, `append_with_id`, `append_batch`                       |
 | 3     | TODO     | `WebhookVerifier`, `WebhookEnvelope`, constant-time verify, axum extractor        |
 | 4     | TODO     | Examples, docs, CI, cross-language interop (blocked on dispatcher v1.0.0), publish |

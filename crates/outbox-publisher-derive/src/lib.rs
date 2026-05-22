@@ -57,9 +57,9 @@ fn expand_domain_event(ast: DeriveInput) -> syn::Result<proc_macro2::TokenStream
     // Only structs are supported.
     let fields = match &ast.data {
         Data::Struct(ds) => &ds.fields,
-        Data::Enum(_de) => {
+        Data::Enum(de) => {
             return Err(syn::Error::new_spanned(
-                &ast.ident,
+                de.enum_token,
                 "`#[derive(DomainEvent)]` can only be applied to structs, not enums",
             ));
         }
@@ -264,9 +264,14 @@ fn is_uuid_type(ty: &Type) -> bool {
     let segs: Vec<&syn::PathSegment> = path.segments.iter().collect();
     match segs.as_slice() {
         // `Uuid`
-        [only] => only.ident == "Uuid",
+        [only] => only.ident == "Uuid" && only.arguments.is_empty(),
         // `uuid::Uuid` or `::uuid::Uuid` (leading_colon is on the Path, not a segment)
-        [crate_seg, ty_seg] => crate_seg.ident == "uuid" && ty_seg.ident == "Uuid",
+        [crate_seg, ty_seg] => {
+            crate_seg.ident == "uuid"
+                && crate_seg.arguments.is_empty()
+                && ty_seg.ident == "Uuid"
+                && ty_seg.arguments.is_empty()
+        }
         _ => false,
     }
 }
