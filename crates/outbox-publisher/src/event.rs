@@ -41,14 +41,20 @@ impl std::fmt::Display for EventId {
 ///
 /// ```
 /// use outbox_publisher::event::EventContext;
+/// use serde_json::Map;
 /// use uuid::Uuid;
+///
+/// let mut metadata = Map::new();
+/// metadata.insert("source".into(), "signup-form".into());
 ///
 /// let ctx = EventContext::default()
 ///     .for_actor(Uuid::new_v4())
-///     .with_correlation(Uuid::new_v4());
+///     .with_correlation(Uuid::new_v4())
+///     .with_metadata(metadata);
 /// assert!(ctx.actor_id().is_some());
 /// assert!(ctx.correlation_id().is_some());
 /// assert!(ctx.causation_id().is_none());
+/// assert_eq!(ctx.metadata().get("source").and_then(|v| v.as_str()), Some("signup-form"));
 /// ```
 #[derive(Debug, Clone)]
 pub struct EventContext {

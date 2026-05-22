@@ -3,7 +3,6 @@ pub mod error;
 pub mod event;
 pub mod publisher;
 
-#[cfg(feature = "axum")]
 pub mod webhook;
 
 pub use domain_event::DomainEvent;
