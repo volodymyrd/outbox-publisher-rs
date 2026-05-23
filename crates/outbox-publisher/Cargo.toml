@@ -12,8 +12,6 @@ repository.workspace = true
 [features]
 default = []
 derive = ["dep:outbox-publisher-derive"]
-# sqlx: reserved for the Phase 2 SqlxPublisher adapter; activates no code yet.
-sqlx = []
 # axum: axum extractor for webhook verification.
 axum = ["dep:axum", "dep:bytes", "dep:http", "dep:tracing"]
 

@@ -253,12 +253,13 @@ pub mod axum_support {
         async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
             let verifier = WebhookVerifier::from_ref(state);
 
-            let signature = req
-                .headers()
-                .get("x-outbox-signature")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("")
-                .to_owned();
+            let signature = match req.headers().get("x-outbox-signature") {
+                None => return Err(WebhookRejection(VerifyError::MissingHeader)),
+                Some(v) => v
+                    .to_str()
+                    .map_err(|_| WebhookRejection(VerifyError::MalformedHeader))?
+                    .to_owned(),
+            };
 
             let body = Bytes::from_request(req, state)
                 .await

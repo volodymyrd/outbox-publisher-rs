@@ -7,7 +7,7 @@
 //! Add the dependency:
 //!
 //! ```toml
-//! outbox-publisher = { version = "0.1", features = ["derive", "sqlx", "axum"] }
+//! outbox-publisher = { version = "0.1", features = ["derive", "axum"] }
 //! outbox-publisher-sqlx = { version = "0.1" }
 //! ```
 //!

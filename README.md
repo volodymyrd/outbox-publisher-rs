@@ -9,7 +9,7 @@ and verify HMAC-signed webhooks delivered by
 Add to `Cargo.toml`:
 
 ```toml
-outbox-publisher = { version = "0.1", features = ["derive", "sqlx", "axum"] }
+outbox-publisher = { version = "0.1", features = ["derive", "axum"] }
 outbox-publisher-sqlx = { version = "0.1" }
 ```
 
@@ -90,15 +90,16 @@ DATABASE_URL=postgres://outbox:outbox@localhost:5434/outbox_dispatcher \
 | Feature | Enables |
 |---|---|
 | `derive` | `#[derive(DomainEvent)]` proc-macro |
-| `sqlx` | Re-exports for the SQLx adapter (use `outbox-publisher-sqlx` for the impl) |
 | `axum` | `OutboxWebhook<E>` extractor and `WebhookRejection` |
 
 ## Contract
 
-The publisher writes to `outbox_events` but never owns the schema.
-The dispatcher's migration is the single source of truth. See
-[the design document](../outbox/TDDs/05-outbox-publisher-tdd.md) for details on
-the shared SQL schema, webhook signature format, and cross-language interoperability.
+The publisher writes to `outbox_events` but never owns the schema. The
+[dispatcher migration][migration] is the single source of truth for the table
+shape and the HMAC webhook envelope; this crate ports the signing format
+verbatim. See the dispatcher repository for the full design document.
+
+[migration]: https://github.com/volodymyrd/outbox-dispatcher/blob/main/migrations/0001_initial_schema.sql
 
 ## License
 

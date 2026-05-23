@@ -21,9 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Honour rust-toolchain.toml — keep lockstep with outbox-dispatcher.
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.88.0"
           components: rustfmt, clippy
 
       - name: Cache Cargo registry + build artifacts
@@ -40,20 +42,26 @@ jobs:
 
   # ── Unit tests (no DB needed) ──────────────────────────────────────────────
   test-unit:
-    name: Unit Tests
+    name: Unit & Doc Tests
     runs-on: ubuntu-latest
     needs: check
     steps:
       - uses: actions/checkout@v4
 
+      # Honour rust-toolchain.toml — keep lockstep with outbox-dispatcher.
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
 
       - name: Cache Cargo registry + build artifacts
         uses: Swatinem/rust-cache@v2
 
       - name: cargo test (lib + unit, all features)
         run: cargo test --workspace --lib --all-features
+
+      - name: cargo test (doctests, all features)
+        run: cargo test --workspace --doc --all-features
 
   # ── Integration tests (real Postgres via testcontainers) ──────────────────
   test-integration:
@@ -63,8 +71,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Honour rust-toolchain.toml — keep lockstep with outbox-dispatcher.
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
 
       - name: Cache Cargo registry + build artifacts
         uses: Swatinem/rust-cache@v2
@@ -74,26 +85,67 @@ jobs:
       - name: cargo test (integration)
         run: cargo test --workspace --test '*'
 
+  # ── sqlx offline cache must match the current query macros ────────────────
+  sqlx-cache:
+    name: sqlx offline cache up-to-date
+    runs-on: ubuntu-latest
+    needs: check
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: outbox
+          POSTGRES_PASSWORD: outbox
+          POSTGRES_DB: outbox_dispatcher
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://outbox:outbox@localhost:5432/outbox_dispatcher
+    steps:
+      - uses: actions/checkout@v4
+
+      # Honour rust-toolchain.toml — keep lockstep with outbox-dispatcher.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features postgres
+
+      - name: Apply schema fixture
+        run: psql "$DATABASE_URL" -f tests/fixtures/0001_initial_schema.sql
+
+      - name: Assert .sqlx is up-to-date
+        run: cargo sqlx prepare --workspace --check
+
   # ── Dry-run publish (catches metadata / version-collision issues early) ────
   publish-dry-run:
     name: Publish Dry-run
     runs-on: ubuntu-latest
-    needs: [test-unit, test-integration]
+    needs: [test-unit, test-integration, sqlx-cache]
     steps:
       - uses: actions/checkout@v4
 
+      # Honour rust-toolchain.toml — keep lockstep with outbox-dispatcher.
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
 
       - name: Cache Cargo registry + build artifacts
         uses: Swatinem/rust-cache@v2
 
-      # Publish in dependency order: derive → sqlx adapter → umbrella.
+      # Publish in dependency order: derive → umbrella → sqlx adapter.
+      # outbox-publisher-sqlx depends on outbox-publisher, so the umbrella crate
+      # must reach crates.io first.
       - name: cargo publish --dry-run (outbox-publisher-derive)
         run: cargo publish --dry-run -p outbox-publisher-derive
 
+      - name: cargo publish --dry-run (outbox-publisher)
+        run: cargo publish --dry-run -p outbox-publisher --all-features
+
       - name: cargo publish --dry-run (outbox-publisher-sqlx)
         run: cargo publish --dry-run -p outbox-publisher-sqlx
-
-      - name: cargo publish --dry-run (outbox-publisher)
-        run: cargo publish --dry-run -p outbox-publisher

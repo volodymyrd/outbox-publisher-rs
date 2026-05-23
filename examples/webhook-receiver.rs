@@ -12,12 +12,7 @@
 //! to `http://localhost:4000/hooks/welcome-email`.
 
 use anyhow::{Context, Result};
-use axum::{
-    extract::{FromRef, State},
-    http::StatusCode,
-    routing::post,
-    Router,
-};
+use axum::{extract::FromRef, http::StatusCode, routing::post, Router};
 use outbox_publisher::webhook::{axum_support::OutboxWebhook, WebhookVerifier};
 use serde::Deserialize;
 use uuid::Uuid;
@@ -45,10 +40,7 @@ impl FromRef<AppState> for WebhookVerifier {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-async fn welcome_email(
-    State(_state): State<AppState>,
-    OutboxWebhook(env): OutboxWebhook<UserRegistered>,
-) -> StatusCode {
+async fn welcome_email(OutboxWebhook(env): OutboxWebhook<UserRegistered>) -> StatusCode {
     if env.attempt > 1 {
         tracing::info!(attempt = env.attempt, "retrying delivery");
     }
