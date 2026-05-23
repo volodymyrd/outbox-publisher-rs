@@ -15,8 +15,6 @@
 //!   -d '{"email":"alice@example.com"}'
 //! ```
 
-use std::sync::Arc;
-
 use anyhow::{Context, Result};
 use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use outbox_publisher::{event::EventContext, DomainEvent};
@@ -41,7 +39,7 @@ struct UserRegistered {
 #[derive(Clone)]
 struct AppState {
     pool: PgPool,
-    publisher: Arc<SqlxPublisher>,
+    publisher: SqlxPublisher,
     webhook_url: String,
 }
 
@@ -125,7 +123,7 @@ async fn main() -> Result<()> {
 
     let state = AppState {
         pool,
-        publisher: Arc::new(SqlxPublisher::new()),
+        publisher: SqlxPublisher::new(),
         webhook_url,
     };
 

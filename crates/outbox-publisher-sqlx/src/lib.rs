@@ -33,6 +33,7 @@
 //! # Ok(())
 //! # }
 //! ```
+#![deny(missing_docs)]
 
 use outbox_publisher::{
     domain_event::DomainEvent,

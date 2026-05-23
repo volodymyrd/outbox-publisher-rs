@@ -34,6 +34,17 @@ jobs:
       - name: Cache Cargo registry + build artifacts
         uses: Swatinem/rust-cache@v2
 
+      # Derive the release version once from the pushed tag; reuse in all
+      # index-propagation polls so they keep working across every future release
+      # without manual edits.
+      - name: Resolve release version from tag
+        id: ver
+        run: |
+          v="${GITHUB_REF#refs/tags/v}"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          # Escape regex metacharacters (dots) for use in grep -E.
+          echo "regex=$(printf '%s' "$v" | sed 's/\./\\./g')" >> "$GITHUB_OUTPUT"
+
       # Dry-run derive first — it has no sibling deps so the crates.io resolver
       # can validate it fully. outbox-publisher and outbox-publisher-sqlx can't
       # be dry-run at this point (their siblings aren't live yet), but they use
@@ -53,10 +64,12 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Wait for outbox-publisher-derive on index
+        env:
+          REGEX: ${{ steps.ver.outputs.regex }}
         run: |
           for _ in $(seq 1 30); do
             if cargo search outbox-publisher-derive --limit 1 \
-                 | grep -q '^outbox-publisher-derive = "0\.1\.0"'; then
+                 | grep -Eq "^outbox-publisher-derive = \"${REGEX}\""; then
               exit 0
             fi
             sleep 5
@@ -70,10 +83,12 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Wait for outbox-publisher on index
+        env:
+          REGEX: ${{ steps.ver.outputs.regex }}
         run: |
           for _ in $(seq 1 30); do
             if cargo search outbox-publisher --limit 1 \
-                 | grep -q '^outbox-publisher = "0\.1\.0"'; then
+                 | grep -Eq "^outbox-publisher = \"${REGEX}\""; then
               exit 0
             fi
             sleep 5

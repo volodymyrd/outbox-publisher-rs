@@ -6,6 +6,7 @@
 //! ```toml
 //! outbox-publisher = { version = "0.1", features = ["derive"] }
 //! ```
+#![deny(missing_docs)]
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
