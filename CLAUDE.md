@@ -8,7 +8,13 @@ Design document: `../TDDs/05-outbox-publisher-tdd.md`. The step-by-step build pl
 
 ## Status
 
-Phase 1 is implemented: workspace, core types, `DomainEvent`/`Publisher` traits, and the `#[derive(DomainEvent)]` proc-macro all live under `crates/`. Phase 2 (`SqlxPublisher`) and Phase 3 (webhook verification) are next per TDD §12.
+Phases 1–3 are implemented and merged on `main`:
+
+- **Phase 1** — workspace, core types, `DomainEvent`/`Publisher` traits, `#[derive(DomainEvent)]` proc-macro.
+- **Phase 2** — `SqlxPublisher` with `append`, `append_with_id`, `append_batch` (UNNEST single round-trip); testcontainers integration tests.
+- **Phase 3** — `WebhookVerifier` with two-sided drift tolerance and redacting `Debug`, `WebhookEnvelope<E>`, constant-time HMAC via `Mac::verify_slice` + proptest single-byte-flip coverage, and the `axum` extractor (`OutboxWebhook<E>`, `WebhookRejection` with `400`/`401`/`422` mapping).
+
+**Phase 4 (Distribution) is next** per TDD §12. Recommended order: `4.3 (CI) → 4.1 (examples) → 4.2 (docs) → 4.5 dry-run → 4.4 (cross-language interop, blocked on dispatcher v1.0.0 image) → 4.5 (real release)`.
 
 ## Workspace layout (target — established by Step 1.1)
 
@@ -117,9 +123,9 @@ See `TDDs/05-outbox-publisher-tdd.md` §12 for the PR-sized step-by-step plan. S
 | Phase | Status   | Description                                                                       |
 |-------|----------|-----------------------------------------------------------------------------------|
 | 1     | DONE     | Workspace, core types, `DomainEvent` + `Publisher` traits, derive macro           |
-| 2     | TODO     | `SqlxPublisher`; `append`, `append_with_id`, `append_batch`                       |
-| 3     | TODO     | `WebhookVerifier`, `WebhookEnvelope`, constant-time verify, axum extractor        |
-| 4     | TODO     | Examples, docs, CI, cross-language interop (blocked on dispatcher v1.0.0), publish |
+| 2     | DONE     | `SqlxPublisher`; `append`, `append_with_id`, `append_batch`                       |
+| 3     | DONE     | `WebhookVerifier`, `WebhookEnvelope`, constant-time verify, axum extractor        |
+| 4     | TODO     | CI (4.3), examples (4.1), docs (4.2), crates.io publish (4.5); cross-language interop (4.4) blocked on dispatcher v1.0.0 |
 
 ## Key design notes
 
