@@ -18,6 +18,4 @@ quote.workspace = true
 syn.workspace = true
 
 [dev-dependencies]
-outbox-publisher = { workspace = true }
-trybuild = "1"
 uuid.workspace = true

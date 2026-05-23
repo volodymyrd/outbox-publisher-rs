@@ -1383,6 +1383,7 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
+ "trybuild",
  "uuid",
 ]
 
@@ -1390,11 +1391,9 @@ dependencies = [
 name = "outbox-publisher-derive"
 version = "0.1.0"
 dependencies = [
- "outbox-publisher",
  "proc-macro2",
  "quote",
  "syn",
- "trybuild",
  "uuid",
 ]
 

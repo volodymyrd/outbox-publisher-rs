@@ -34,7 +34,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Lit, Type, TypePath};
 ///
 /// ## Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// use outbox_publisher_derive::DomainEvent;
 /// use outbox_publisher::domain_event::DomainEvent;
 /// use uuid::Uuid;

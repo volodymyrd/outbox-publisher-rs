@@ -32,6 +32,9 @@ tracing = { workspace = true, optional = true }
 uuid.workspace = true
 
 [dev-dependencies]
+outbox-publisher-derive = { workspace = true }
 proptest.workspace = true
 tokio.workspace = true
 tower = { workspace = true, features = ["util"] }
+trybuild = "1"
+uuid.workspace = true

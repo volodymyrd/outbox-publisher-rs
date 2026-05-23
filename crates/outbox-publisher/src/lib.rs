@@ -14,9 +14,8 @@
 //! Define an event, publish it, and receive the webhook:
 //!
 //! ```rust
-//! use outbox_publisher::{DomainEvent, event::EventContext};
+//! # use outbox_publisher_derive::DomainEvent;
 //! use serde::{Deserialize, Serialize};
-//! use serde_json::json;
 //! use uuid::Uuid;
 //!
 //! // 1. Define a typed event.
