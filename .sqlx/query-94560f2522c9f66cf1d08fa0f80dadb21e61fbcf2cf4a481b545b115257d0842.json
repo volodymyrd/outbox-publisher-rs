@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO outbox_events\n                (event_id, kind, aggregate_type, aggregate_id,\n                 payload, metadata, callbacks,\n                 actor_id, correlation_id, causation_id)\n            SELECT * FROM UNNEST(\n                $1::uuid[], $2::text[], $3::text[], $4::uuid[],\n                $5::jsonb[], $6::jsonb[], $7::jsonb[],\n                $8::uuid[], $9::uuid[], $10::uuid[]\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "UuidArray",
+        "JsonbArray",
+        "JsonbArray",
+        "JsonbArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "94560f2522c9f66cf1d08fa0f80dadb21e61fbcf2cf4a481b545b115257d0842"
+}

@@ -93,7 +93,7 @@ date -u +"%Y-%m-%dT%H:%M:%SZ"
 
 ### File path
 
-Create the `code-review/` directory at the workspace root if it does not exist, then write:
+Create the `code-review/` directory at the workspace root if it does not exist, then determine the report path:
 
 ```
 code-review/YYYY-MM-DD_<branch>_<target-slug>.md
@@ -104,6 +104,16 @@ code-review/YYYY-MM-DD_<branch>_<target-slug>.md
 - `<target-slug>` — the reviewed file or scope: base filename without extension, or `workspace` when reviewing the full workspace
 
 Example: `code-review/2026-06-01_phase2-sqlx_publisher.md`
+
+**Same-file rule:** Before writing, check whether a report file already exists for this branch + target-slug combination (the date in the filename may differ — glob `code-review/*_<branch>_<target-slug>.md`). If one exists, **append** new findings to that file rather than creating a new one:
+
+1. Number new findings sequentially after the highest existing finding number.
+2. Update the `**Last updated:**` header line (add it after `**Date:**` if absent).
+3. Add new rows to the existing summary table.
+4. Do **not** duplicate findings that are already present (matched by title or file:line).
+5. Do **not** create a separate `-round2`, `-followup`, or dated-suffix file.
+
+If no prior report exists, create the file with today's date as `YYYY-MM-DD`.
 
 ### Report structure
 
