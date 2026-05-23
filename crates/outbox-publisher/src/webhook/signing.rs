@@ -13,8 +13,6 @@
 //! [`verify`] uses `hmac::Mac::verify_slice` — never `==` on hex strings — to
 //! prevent timing side-channels.
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
@@ -37,30 +35,34 @@ pub fn verify(secret: &[u8], timestamp_secs: u64, body: &[u8], header_value: &st
     let Ok(decoded) = hex::decode(hex_digest) else {
         return false;
     };
+    verify_decoded(secret, timestamp_secs, body, &decoded)
+}
 
+/// Like [`verify`] but accepts the already-decoded digest bytes.
+///
+/// Used by [`super::WebhookVerifier::verify`] after it has decoded the digest
+/// itself (so a hex-decode failure can be distinguished from an HMAC mismatch).
+pub(crate) fn verify_decoded(
+    secret: &[u8],
+    timestamp_secs: u64,
+    body: &[u8],
+    decoded_digest: &[u8],
+) -> bool {
     let mut mac = HmacSha256::new_from_slice(secret).expect("HMAC accepts any key length");
     mac.update(format!("{timestamp_secs}.").as_bytes());
     mac.update(body);
-    mac.verify_slice(&decoded).is_ok()
+    mac.verify_slice(decoded_digest).is_ok()
 }
 
-/// High-level verifier: parses `t=`, enforces the replay window, then
-/// delegates to [`verify`] for the constant-time HMAC check.
+/// Parses the `v1=` field from `header_value` and hex-decodes the digest.
 ///
-/// Returns `true` only when the signature is valid **and** within the replay
-/// window.
-pub fn verify_header(secret: &[u8], body: &[u8], header_value: &str, max_age: Duration) -> bool {
-    let Some(ts) = parse_t_field(header_value) else {
-        return false;
-    };
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    if now.saturating_sub(ts) > max_age.as_secs() {
-        return false;
-    }
-    verify(secret, ts, body, header_value)
+/// Returns `None` if the field is absent or contains non-hex characters.
+/// Used by [`super::WebhookVerifier::verify`] so a hex-decode failure can be
+/// reported as [`crate::error::VerifyError::MalformedHeader`] rather than
+/// [`crate::error::VerifyError::InvalidSignature`].
+pub(crate) fn parse_v1_decoded(header_value: &str) -> Option<Vec<u8>> {
+    let hex_digest = parse_v1_digest(header_value)?;
+    hex::decode(hex_digest).ok()
 }
 
 /// Sign `body` with `secret` and `timestamp_secs`.
@@ -87,7 +89,7 @@ pub(crate) fn parse_t_field(header_value: &str) -> Option<u64> {
     None
 }
 
-fn parse_v1_digest(header_value: &str) -> Option<&str> {
+pub(crate) fn parse_v1_digest(header_value: &str) -> Option<&str> {
     for part in header_value.split(',') {
         if let Some(hex) = part.trim().strip_prefix("v1=") {
             return Some(hex);
@@ -98,6 +100,8 @@ fn parse_v1_digest(header_value: &str) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
     use super::*;
 
     const SECRET: &[u8] = b"super-secret-key-32-bytes-minimum!!";
@@ -116,6 +120,67 @@ mod tests {
         let ts = 1_714_229_400_u64;
         let header = sign(SECRET, ts, body);
         assert!(!verify(b"wrong-secret", ts, body, &header));
+    }
+
+    #[test]
+    fn verify_rejects_single_byte_flip() {
+        let body = b"{\"hello\":\"world\"}";
+        let ts = 1_714_229_400_u64;
+        let header = sign(SECRET, ts, body);
+
+        let flipped = header.replacen('a', "b", 1);
+        let flipped = if flipped == header {
+            header.replacen('0', "1", 1)
+        } else {
+            flipped
+        };
+
+        assert!(!verify(SECRET, ts, body, &flipped));
+    }
+
+    #[test]
+    fn verify_rejects_malformed_header_no_v1() {
+        assert!(!verify(SECRET, 0, b"body", "t=0,garbage=abc"));
+    }
+
+    #[test]
+    fn verify_rejects_non_hex_digest() {
+        assert!(!verify(SECRET, 0, b"body", "t=0,v1=not-hex!!"));
+    }
+
+    #[test]
+    fn parse_v1_decoded_returns_none_for_non_hex() {
+        assert!(parse_v1_decoded("t=0,v1=not-hex!!").is_none());
+    }
+
+    #[test]
+    fn parse_v1_decoded_returns_none_when_absent() {
+        assert!(parse_v1_decoded("t=0,garbage=abc").is_none());
+    }
+
+    #[test]
+    fn parse_v1_decoded_returns_bytes_for_valid_hex() {
+        let body = b"hello";
+        let ts = 1_714_229_400_u64;
+        let header = sign(SECRET, ts, body);
+        assert!(parse_v1_decoded(&header).is_some());
+    }
+
+    // ── verify_header (test-only helper, kept for coverage of legacy path) ────
+
+    fn verify_header(secret: &[u8], body: &[u8], header_value: &str, max_age: Duration) -> bool {
+        let Some(ts) = parse_t_field(header_value) else {
+            return false;
+        };
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let tolerance_secs = max_age.as_secs();
+        if now.abs_diff(ts) > tolerance_secs {
+            return false;
+        }
+        verify(secret, ts, body, header_value)
     }
 
     #[test]
@@ -178,29 +243,20 @@ mod tests {
     }
 
     #[test]
-    fn verify_rejects_single_byte_flip() {
+    fn verify_header_rejects_future_timestamp() {
         let body = b"{\"hello\":\"world\"}";
-        let ts = 1_714_229_400_u64;
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 3601;
         let header = sign(SECRET, ts, body);
-
-        let flipped = header.replacen('a', "b", 1);
-        let flipped = if flipped == header {
-            header.replacen('0', "1", 1)
-        } else {
-            flipped
-        };
-
-        assert!(!verify(SECRET, ts, body, &flipped));
-    }
-
-    #[test]
-    fn verify_rejects_malformed_header_no_v1() {
-        assert!(!verify(SECRET, 0, b"body", "t=0,garbage=abc"));
-    }
-
-    #[test]
-    fn verify_rejects_non_hex_digest() {
-        assert!(!verify(SECRET, 0, b"body", "t=0,v1=not-hex!!"));
+        assert!(!verify_header(
+            SECRET,
+            body,
+            &header,
+            Duration::from_secs(300)
+        ));
     }
 }
 

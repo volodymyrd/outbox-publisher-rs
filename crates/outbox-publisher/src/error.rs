@@ -33,6 +33,9 @@ pub enum VerifyError {
     /// The webhook body could not be deserialized into the expected type.
     #[error("body parse failed: {0}")]
     BodyParse(#[from] serde_json::Error),
+    /// The request body could not be read from the underlying transport.
+    #[error("request body read failed: {0}")]
+    BodyRead(String),
 }
 
 #[cfg(test)]
@@ -97,5 +100,14 @@ mod tests {
         let json_err = serde_json::from_str::<serde_json::Value>("bad").unwrap_err();
         let err = VerifyError::BodyParse(json_err);
         assert!(err.to_string().starts_with("body parse failed:"));
+    }
+
+    #[test]
+    fn verify_error_body_read_display() {
+        let err = VerifyError::BodyRead("connection reset".to_owned());
+        assert_eq!(
+            err.to_string(),
+            "request body read failed: connection reset"
+        );
     }
 }

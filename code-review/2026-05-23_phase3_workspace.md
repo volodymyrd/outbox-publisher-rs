@@ -642,14 +642,14 @@ The cross-language contract is the load-bearing surface of this library; locally
 
 | # | Title | File:Line | Severity | Category | Status | Notes |
 |---|-------|-----------|----------|----------|--------|-------|
-| 1 | Non-hex `v1=` digest reported as `InvalidSignature` instead of `MalformedHeader` | `crates/outbox-publisher/src/webhook/mod.rs:131-149` | Medium | Correctness | TODO | |
-| 2 | Future-dated timestamps pass the tolerance check (one-sided drift comparison) | `crates/outbox-publisher/src/webhook/mod.rs:138-145` | Medium | Security | TODO | |
-| 3 | Axum extractor and `WebhookRejection` are entirely untested | `crates/outbox-publisher/src/webhook/mod.rs:175-275` | Medium | Testing | TODO | |
-| 4 | Body-extraction failure laundered into fabricated `serde_json::Error` | `crates/outbox-publisher/src/webhook/mod.rs:262-266` | Medium | Correctness / Idiom | TODO | |
-| 5 | `signing::verify_header` is a redundant public API duplicating `WebhookVerifier::verify` | `crates/outbox-publisher/src/webhook/signing.rs:52-64` | Low | Idiom | TODO | |
-| 6 | Inline `v1=` parsing in `mod.rs` duplicates `signing::parse_v1_digest` | `crates/outbox-publisher/src/webhook/mod.rs:131-136` | Low | Idiom | TODO | |
-| 7 | Clock-before-epoch silently accepts any timestamp (fail-open) | `crates/outbox-publisher/src/webhook/mod.rs:138-145` | Low | Security | TODO | |
-| 8 | `WebhookEnvelope` deserialization not tested with populated optional fields | `crates/outbox-publisher/src/webhook/mod.rs:386-405` | Low | Testing / Cross-language | TODO | |
+| 1 | Non-hex `v1=` digest reported as `InvalidSignature` instead of `MalformedHeader` | `crates/outbox-publisher/src/webhook/mod.rs:131-149` | Medium | Correctness | DONE | Added `parse_v1_decoded` helper; `WebhookVerifier::verify` now returns `MalformedHeader` on non-hex digest; test `verify_rejects_non_hex_v1_as_malformed_header` added. |
+| 2 | Future-dated timestamps pass the tolerance check (one-sided drift comparison) | `crates/outbox-publisher/src/webhook/mod.rs:138-145` | Medium | Security | DONE | Replaced `saturating_sub` with `abs_diff` for two-sided drift; test `verify_rejects_future_timestamp_outside_tolerance` added; `verify_header` test helper updated likewise. |
+| 3 | Axum extractor and `WebhookRejection` are entirely untested | `crates/outbox-publisher/src/webhook/mod.rs:175-275` | Medium | Testing | DONE | Added `axum_tests` module with 6 `#[cfg(all(test, feature = "axum"))]` tests covering valid, bad-secret, missing-header, malformed-header, expired, and bad-JSON paths; `tower` added as dev-dep. |
+| 4 | Body-extraction failure laundered into fabricated `serde_json::Error` | `crates/outbox-publisher/src/webhook/mod.rs:262-266` | Medium | Correctness / Idiom | DONE | Added `VerifyError::BodyRead(String)`; extractor now maps `Bytes` extraction failure to `BodyRead` with the real error message; `WebhookRejection` maps it to `400 BAD_REQUEST`. |
+| 5 | `signing::verify_header` is a redundant public API duplicating `WebhookVerifier::verify` | `crates/outbox-publisher/src/webhook/signing.rs:52-64` | Low | Idiom | DONE | `verify_header` demoted to a private test helper inside `#[cfg(test)] mod tests`; no longer part of the public or crate-internal API. |
+| 6 | Inline `v1=` parsing in `mod.rs` duplicates `signing::parse_v1_digest` | `crates/outbox-publisher/src/webhook/mod.rs:131-136` | Low | Idiom | DONE | Inline split loop replaced by `parse_v1_decoded` (which internally calls the authoritative `parse_v1_digest`); `parse_v1_digest` promoted to `pub(crate)`. |
+| 7 | Clock-before-epoch silently accepts any timestamp (fail-open) | `crates/outbox-publisher/src/webhook/mod.rs:138-145` | Low | Security | DONE | `duration_since(UNIX_EPOCH)` failure now maps to `VerifyError::TimestampOutOfTolerance` via `map_err`; fail-closed. |
+| 8 | `WebhookEnvelope` deserialization not tested with populated optional fields | `crates/outbox-publisher/src/webhook/mod.rs:386-405` | Low | Testing / Cross-language | DONE | Added `verify_and_parse_populates_all_envelope_fields` test asserting every field of `WebhookEnvelope` round-trips correctly. |
 
 > **Instructions for the implementing LLM:**
 > - Change `TODO` to `DONE` once a finding is fully addressed.
