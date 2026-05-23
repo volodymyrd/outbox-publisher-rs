@@ -272,8 +272,8 @@ Matches the convention used by every other rollback in the file, and makes a rea
 | # | Title | File:Line | Severity | Category | Status | Notes |
 |---|-------|-----------|----------|----------|--------|-------|
 | 1 | `MissingCallbacks` and empty-batch integration tests boot Postgres for no-DB code paths | `tests/integration_test.rs:294,320,491,516` | Low | Testing | DONE | Extracted `validate_callbacks` helper; added `validate_callbacks_rejects_empty` and `validate_callbacks_accepts_non_empty` unit tests in `lib.rs`; deleted the 3 `MissingCallbacks` integration tests. `append_batch_empty_is_noop` kept in integration suite — `pool.begin()` requires a real connection so it cannot be made DB-free without refactoring the `Transaction` type boundary. |
-| 2 | Stale `Finding N` section-header comments reference deleted review numbers | `tests/integration_test.rs:353,383,460` | Low | Idiom | TODO | |
-| 3 | `tx2.rollback().await.ok()` silently swallows rollback errors | `tests/integration_test.rs:281` | Low | Testing | TODO | |
+| 2 | Stale `Finding N` section-header comments reference deleted review numbers | `tests/integration_test.rs:353,383,460` | Low | Idiom | DONE | Replaced `Finding 6`, `Finding 5`, `Finding 16` banners with descriptive titles: `Rollback behaviour`, `Optional field handling`, `Batch / individual equivalence`. |
+| 3 | `tx2.rollback().await.ok()` silently swallows rollback errors | `tests/integration_test.rs:281` | Low | Testing | DONE | Changed `.ok()` to `.expect("rollback")` to match every other rollback in the file. |
 
 > **Instructions for the implementing LLM:**
 > - Change `TODO` to `DONE` once a finding is fully addressed.
