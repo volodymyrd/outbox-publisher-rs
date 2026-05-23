@@ -25,7 +25,7 @@ outbox-publisher-rs/
 ├── crates/
 │   ├── outbox-publisher/            # umbrella crate (published to crates.io)
 │   │   ├── src/
-│   │   │   ├── lib.rs               # re-exports per feature flags (sqlx, derive, axum)
+│   │   │   ├── lib.rs               # re-exports per feature flags (derive, axum)
 │   │   │   ├── domain_event.rs      # DomainEvent trait
 │   │   │   ├── event.rs             # EventContext, EventId
 │   │   │   ├── publisher.rs         # Publisher trait with Tx<'a> GAT
@@ -50,7 +50,7 @@ outbox-publisher-rs/
 └── README.md
 ```
 
-Most consumers depend only on `outbox-publisher = { version = "1", features = ["sqlx", "derive", "axum"] }`. The sub-crates are split so users on a different database driver can pull just the umbrella crate without the SQLx transitive deps.
+Most consumers depend on `outbox-publisher = { version = "1", features = ["derive", "axum"] }` together with `outbox-publisher-sqlx = { version = "1" }`. The sub-crates are split so users on a different database driver can pull just the umbrella crate without the SQLx transitive deps.
 
 ## Mandatory After Every Code Change
 

@@ -1369,11 +1369,9 @@ name = "outbox-publisher"
 version = "0.1.0"
 dependencies = [
  "axum",
- "bytes",
  "chrono",
  "hex",
  "hmac 0.13.0",
- "http",
  "outbox-publisher-derive",
  "proptest",
  "serde",
