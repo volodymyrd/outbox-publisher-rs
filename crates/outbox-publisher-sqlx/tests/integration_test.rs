@@ -288,34 +288,6 @@ async fn append_with_id_duplicate_returns_error() {
 
 // ── Step 2.5 — append_batch ───────────────────────────────────────────────────
 
-// ── Finding 15 — MissingCallbacks coverage for append_with_id ────────────────
-
-/// `append_with_id` returns `MissingCallbacks` when `EventContext` has no callbacks.
-#[tokio::test]
-async fn append_with_id_returns_missing_callbacks_error() {
-    let (pool, _container) = setup_db().await;
-    let publisher = SqlxPublisher::new();
-
-    let event_id = EventId::from(Uuid::new_v4());
-    let event = UserRegistered {
-        user_id: Uuid::new_v4(),
-        email: "no-cb@example.com".to_owned(),
-    };
-    let ctx = EventContext::default(); // no callbacks
-
-    let mut tx = pool.begin().await.expect("begin tx");
-    let err = publisher
-        .append_with_id(&mut tx, event_id, &event, &ctx)
-        .await
-        .expect_err("expected MissingCallbacks");
-    tx.rollback().await.ok();
-
-    assert!(
-        matches!(err, outbox_publisher::error::PublishError::MissingCallbacks),
-        "expected MissingCallbacks, got {err:?}",
-    );
-}
-
 /// `append_batch` on an empty slice returns an empty vec without touching the DB.
 #[tokio::test]
 async fn append_batch_empty_is_noop() {
@@ -483,69 +455,6 @@ async fn append_batch_handles_mixed_null_optional_fields() {
     assert_eq!(rows[2].get::<Option<Uuid>, _>("actor_id"), Some(actor));
     assert_eq!(rows[2].get::<Option<Uuid>, _>("correlation_id"), None);
     assert_eq!(rows[2].get::<Option<Uuid>, _>("causation_id"), None);
-}
-
-// ── Finding 3 — MissingCallbacks error ───────────────────────────────────────
-
-/// `append` returns `MissingCallbacks` when `EventContext` has no callbacks.
-#[tokio::test]
-async fn append_returns_missing_callbacks_error() {
-    let (pool, _container) = setup_db().await;
-    let publisher = SqlxPublisher::new();
-
-    let event = UserRegistered {
-        user_id: Uuid::new_v4(),
-        email: "no-callbacks@example.com".to_owned(),
-    };
-    let ctx = EventContext::default(); // no callbacks
-
-    let mut tx = pool.begin().await.expect("begin tx");
-    let err = publisher
-        .append(&mut tx, &event, &ctx)
-        .await
-        .expect_err("expected MissingCallbacks");
-    tx.rollback().await.ok();
-
-    assert!(
-        matches!(err, outbox_publisher::error::PublishError::MissingCallbacks),
-        "expected MissingCallbacks, got {err:?}",
-    );
-}
-
-/// `append_batch` returns `MissingCallbacks` when any context has no callbacks.
-#[tokio::test]
-async fn append_batch_returns_missing_callbacks_error() {
-    let (pool, _container) = setup_db().await;
-    let publisher = SqlxPublisher::new();
-
-    let events = vec![
-        (
-            UserRegistered {
-                user_id: Uuid::new_v4(),
-                email: "ok@example.com".to_owned(),
-            },
-            test_ctx(),
-        ),
-        (
-            UserRegistered {
-                user_id: Uuid::new_v4(),
-                email: "no-cb@example.com".to_owned(),
-            },
-            EventContext::default(), // no callbacks
-        ),
-    ];
-
-    let mut tx = pool.begin().await.expect("begin tx");
-    let err = publisher
-        .append_batch(&mut tx, &events)
-        .await
-        .expect_err("expected MissingCallbacks");
-    tx.rollback().await.ok();
-
-    assert!(
-        matches!(err, outbox_publisher::error::PublishError::MissingCallbacks),
-        "expected MissingCallbacks, got {err:?}",
-    );
 }
 
 // ── Finding 16 — batch vs individual column equivalence ──────────────────────

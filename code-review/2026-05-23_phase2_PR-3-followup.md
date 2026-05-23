@@ -1,6 +1,7 @@
 # Code Review — PR #3 follow-up TODOs
 
 **Date:** 2026-05-23T09:29:05Z
+**Last updated:** 2026-05-23T09:42:54Z
 **Branch:** phase2
 **Reviewed by:** Claude (review command)
 **Scope:** Carry-forward TODOs from prior reviews + new findings from a fresh review of PR #3 (`crates/outbox-publisher-sqlx/src/lib.rs`, `crates/outbox-publisher-sqlx/tests/integration_test.rs`)
@@ -135,11 +136,144 @@ Re-establishes the invariant Phase 2 Finding 17 set: integration tests in this f
 
 ---
 
+### Finding 2 — Stale `Finding N` section-header comments reference deleted review numbers
+
+| Field | Value |
+|-------|-------|
+| **File:Line** | `crates/outbox-publisher-sqlx/tests/integration_test.rs:353, 383, 460` |
+| **Severity** | Low |
+| **Category** | Idiom |
+
+**Problem**
+
+Three section-header comments in the integration-test file point at numbered findings from prior review files that have since been deleted from the working tree (kept only in git history). New readers cannot resolve what `Finding 5`, `Finding 6`, or `Finding 16` mean without spelunking through git — and the numbers will continue to bit-rot. Section headers should describe the test, not cite ephemeral review IDs.
+
+**Context** (surrounding code as it exists today)
+
+```rust
+// crates/outbox-publisher-sqlx/tests/integration_test.rs:353
+// ── Finding 6 — rollback test for append_with_id ─────────────────────────────
+
+/// `append_with_id` rollback leaves no row in the table.
+#[tokio::test]
+async fn append_with_id_rollback_leaves_no_row() {
+```
+
+```rust
+// crates/outbox-publisher-sqlx/tests/integration_test.rs:383
+// ── Finding 5 — batch with mixed-NULL optional fields ─────────────────────────
+
+/// `append_batch` correctly handles a mix of populated and absent optional fields.
+#[tokio::test]
+async fn append_batch_handles_mixed_null_optional_fields() {
+```
+
+```rust
+// crates/outbox-publisher-sqlx/tests/integration_test.rs:460
+// ── Finding 16 — batch vs individual column equivalence ──────────────────────
+
+/// `append_batch` writes the same column values as N successive `append` calls.
+#[tokio::test]
+async fn append_batch_writes_same_columns_as_individual_appends() {
+```
+
+**Recommended fix**
+
+Replace each `Finding N` reference with a descriptive section title — or drop the section banner entirely, since each test already has a doc-comment describing its scope.
+
+```rust
+// crates/outbox-publisher-sqlx/tests/integration_test.rs:353
+// ── Rollback behaviour ───────────────────────────────────────────────────────
+
+/// `append_with_id` rollback leaves no row in the table.
+#[tokio::test]
+async fn append_with_id_rollback_leaves_no_row() {
+```
+
+```rust
+// crates/outbox-publisher-sqlx/tests/integration_test.rs:383
+// ── Optional field handling ──────────────────────────────────────────────────
+
+/// `append_batch` correctly handles a mix of populated and absent optional fields.
+#[tokio::test]
+async fn append_batch_handles_mixed_null_optional_fields() {
+```
+
+```rust
+// crates/outbox-publisher-sqlx/tests/integration_test.rs:460
+// ── Batch / individual equivalence ───────────────────────────────────────────
+
+/// `append_batch` writes the same column values as N successive `append` calls.
+#[tokio::test]
+async fn append_batch_writes_same_columns_as_individual_appends() {
+```
+
+**Why this fix**
+
+Comments should make sense to a reader who only has the current code — referencing review-file finding numbers couples the source to documents that are not under source control alongside the code. Per CLAUDE.md, comments are for non-obvious *why*; review-bookkeeping markers don't qualify.
+
+---
+
+### Finding 3 — `tx2.rollback().await.ok()` silently swallows rollback errors
+
+| Field | Value |
+|-------|-------|
+| **File:Line** | `crates/outbox-publisher-sqlx/tests/integration_test.rs:281` |
+| **Severity** | Low |
+| **Category** | Testing |
+
+**Problem**
+
+The duplicate-event-id test uses `.ok()` to discard the result of `tx2.rollback().await`, which drops both success and error outcomes. Every other rollback in this file uses `.expect("rollback")` (lines 204, 373, 607). The inconsistency is small but masks the case where the test transaction itself is unhealthy — and tests should be loud about cleanup failures, not silently move on.
+
+The transaction here aborts because `append_with_id` returned an error, so PostgreSQL has already marked the connection's transaction state. A subsequent `ROLLBACK` is the legitimate way to clear that state and should succeed; if it doesn't, the test environment is broken and the test should fail.
+
+**Context** (surrounding code as it exists today)
+
+```rust
+// crates/outbox-publisher-sqlx/tests/integration_test.rs:276-287
+    let mut tx2 = pool.begin().await.expect("begin tx2");
+    let err = publisher
+        .append_with_id(&mut tx2, event_id, &event2, &ctx)
+        .await
+        .expect_err("expected duplicate error");
+    tx2.rollback().await.ok();
+
+    assert!(
+        matches!(err, outbox_publisher::error::PublishError::DuplicateEventId),
+        "expected DuplicateEventId, got {err:?}",
+    );
+```
+
+**Recommended fix**
+
+```rust
+    let mut tx2 = pool.begin().await.expect("begin tx2");
+    let err = publisher
+        .append_with_id(&mut tx2, event_id, &event2, &ctx)
+        .await
+        .expect_err("expected duplicate error");
+    tx2.rollback().await.expect("rollback");
+
+    assert!(
+        matches!(err, outbox_publisher::error::PublishError::DuplicateEventId),
+        "expected DuplicateEventId, got {err:?}",
+    );
+```
+
+**Why this fix**
+
+Matches the convention used by every other rollback in the file, and makes a real transaction-cleanup failure visible instead of silent. `.ok()` is the equivalent of writing "if this fails, do nothing" — almost never what a test wants.
+
+---
+
 ## Summary
 
 | # | Title | File:Line | Severity | Category | Status | Notes |
 |---|-------|-----------|----------|----------|--------|-------|
-| 1 | `MissingCallbacks` and empty-batch integration tests boot Postgres for no-DB code paths | `tests/integration_test.rs:294,320,491,516` | Low | Testing | TODO | Follow-on to Phase 2 Finding 17; affects ~30% of integration-suite wall time |
+| 1 | `MissingCallbacks` and empty-batch integration tests boot Postgres for no-DB code paths | `tests/integration_test.rs:294,320,491,516` | Low | Testing | DONE | Extracted `validate_callbacks` helper; added `validate_callbacks_rejects_empty` and `validate_callbacks_accepts_non_empty` unit tests in `lib.rs`; deleted the 3 `MissingCallbacks` integration tests. `append_batch_empty_is_noop` kept in integration suite — `pool.begin()` requires a real connection so it cannot be made DB-free without refactoring the `Transaction` type boundary. |
+| 2 | Stale `Finding N` section-header comments reference deleted review numbers | `tests/integration_test.rs:353,383,460` | Low | Idiom | TODO | |
+| 3 | `tx2.rollback().await.ok()` silently swallows rollback errors | `tests/integration_test.rs:281` | Low | Testing | TODO | |
 
 > **Instructions for the implementing LLM:**
 > - Change `TODO` to `DONE` once a finding is fully addressed.

@@ -106,6 +106,14 @@ impl Publisher for SqlxPublisher {
     }
 }
 
+/// Returns `Err(PublishError::MissingCallbacks)` when `ctx` carries no callbacks.
+fn validate_callbacks(ctx: &EventContext) -> Result<(), PublishError> {
+    if ctx.callbacks().is_empty() {
+        return Err(PublishError::MissingCallbacks);
+    }
+    Ok(())
+}
+
 impl SqlxPublisher {
     /// Core single-row INSERT shared by `append` and `append_with_id`.
     async fn insert<E>(
@@ -118,9 +126,7 @@ impl SqlxPublisher {
     where
         E: DomainEvent + Serialize,
     {
-        if ctx.callbacks().is_empty() {
-            return Err(PublishError::MissingCallbacks);
-        }
+        validate_callbacks(ctx)?;
 
         let payload = serde_json::to_value(event)?;
         let metadata = serde_json::to_value(ctx.metadata())?;
@@ -171,9 +177,7 @@ impl SqlxPublisher {
         }
 
         for (_, ctx) in events {
-            if ctx.callbacks().is_empty() {
-                return Err(PublishError::MissingCallbacks);
-            }
+            validate_callbacks(ctx)?;
         }
 
         let len = events.len();
@@ -267,5 +271,22 @@ mod tests {
             matches!(publish_err, PublishError::Serialization(_)),
             "expected Serialization, got {publish_err:?}",
         );
+    }
+
+    #[test]
+    fn validate_callbacks_rejects_empty() {
+        let ctx = EventContext::default();
+        let err = validate_callbacks(&ctx).expect_err("expected MissingCallbacks");
+        assert!(
+            matches!(err, PublishError::MissingCallbacks),
+            "expected MissingCallbacks, got {err:?}",
+        );
+    }
+
+    #[test]
+    fn validate_callbacks_accepts_non_empty() {
+        let ctx = EventContext::default()
+            .with_callbacks(vec![serde_json::json!({"name": "n", "url": "u"})]);
+        assert!(validate_callbacks(&ctx).is_ok());
     }
 }
