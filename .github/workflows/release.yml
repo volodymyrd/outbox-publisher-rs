@@ -34,6 +34,14 @@ jobs:
       - name: Cache Cargo registry + build artifacts
         uses: Swatinem/rust-cache@v2
 
+      # Dry-run derive first — it has no sibling deps so the crates.io resolver
+      # can validate it fully. outbox-publisher and outbox-publisher-sqlx can't
+      # be dry-run at this point (their siblings aren't live yet), but they use
+      # --no-verify on the real publish which is safe because CI already ran the
+      # full test suite.
+      - name: cargo publish --dry-run (outbox-publisher-derive)
+        run: cargo publish --dry-run -p outbox-publisher-derive
+
       # Publish in dependency order: derive → umbrella → sqlx adapter.
       # outbox-publisher-sqlx depends on outbox-publisher, so the umbrella crate
       # must reach crates.io first.
