@@ -17,7 +17,6 @@ sqlx.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-serde.workspace = true
 testcontainers.workspace = true
 testcontainers-modules.workspace = true
 tokio.workspace = true

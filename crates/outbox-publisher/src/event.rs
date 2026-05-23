@@ -38,9 +38,11 @@ impl std::fmt::Display for EventId {
 /// instance with all optional fields set to `None`, `metadata` set to `{}`, and
 /// `callbacks` set to an empty array.
 ///
-/// **Note:** the `outbox_events` schema requires at least one callback entry.
-/// Always call [`EventContext::with_callbacks`] before passing the context to a
-/// publisher, otherwise the insert will be rejected by the database constraint.
+/// **Note:** at least one callback is required. Publishers (including
+/// `SqlxPublisher`) return [`crate::error::PublishError::MissingCallbacks`]
+/// up front if `callbacks` is empty — the call never reaches the database.
+/// Always call [`EventContext::with_callbacks`] before passing the context
+/// to a publisher.
 ///
 /// # Example
 ///
@@ -74,7 +76,8 @@ pub struct EventContext {
     /// Arbitrary structured metadata forwarded verbatim into the outbox row.
     metadata: serde_json::Map<String, serde_json::Value>,
     /// Delivery targets for this event (e.g. webhook URLs). At least one entry
-    /// is required by the `outbox_events` schema constraint.
+    /// is required; publishers return [`crate::error::PublishError::MissingCallbacks`]
+    /// if this is empty.
     callbacks: Vec<serde_json::Value>,
 }
 
@@ -134,8 +137,8 @@ impl EventContext {
     /// Delivery targets for this event.
     ///
     /// Each entry is a JSON object describing a webhook target (at minimum
-    /// `"name"` and `"url"` fields). The `outbox_events` schema requires at
-    /// least one entry.
+    /// `"name"` and `"url"` fields). Publishers require at least one entry
+    /// and return [`crate::error::PublishError::MissingCallbacks`] otherwise.
     pub fn callbacks(&self) -> &[serde_json::Value] {
         &self.callbacks
     }

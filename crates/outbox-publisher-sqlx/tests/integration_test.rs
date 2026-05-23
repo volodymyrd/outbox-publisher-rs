@@ -288,6 +288,34 @@ async fn append_with_id_duplicate_returns_error() {
 
 // ── Step 2.5 — append_batch ───────────────────────────────────────────────────
 
+// ── Finding 15 — MissingCallbacks coverage for append_with_id ────────────────
+
+/// `append_with_id` returns `MissingCallbacks` when `EventContext` has no callbacks.
+#[tokio::test]
+async fn append_with_id_returns_missing_callbacks_error() {
+    let (pool, _container) = setup_db().await;
+    let publisher = SqlxPublisher::new();
+
+    let event_id = EventId::from(Uuid::new_v4());
+    let event = UserRegistered {
+        user_id: Uuid::new_v4(),
+        email: "no-cb@example.com".to_owned(),
+    };
+    let ctx = EventContext::default(); // no callbacks
+
+    let mut tx = pool.begin().await.expect("begin tx");
+    let err = publisher
+        .append_with_id(&mut tx, event_id, &event, &ctx)
+        .await
+        .expect_err("expected MissingCallbacks");
+    tx.rollback().await.ok();
+
+    assert!(
+        matches!(err, outbox_publisher::error::PublishError::MissingCallbacks),
+        "expected MissingCallbacks, got {err:?}",
+    );
+}
+
 /// `append_batch` on an empty slice returns an empty vec without touching the DB.
 #[tokio::test]
 async fn append_batch_empty_is_noop() {
@@ -520,82 +548,35 @@ async fn append_batch_returns_missing_callbacks_error() {
     );
 }
 
-// ── Finding 7 — Serialization error branch ───────────────────────────────────
+// ── Finding 16 — batch vs individual column equivalence ──────────────────────
 
-/// `append` returns `Serialization` when the event's `Serialize` impl fails.
+/// `append_batch` writes the same column values as N successive `append` calls.
 #[tokio::test]
-async fn append_returns_serialization_error_for_failing_serialize() {
-    use serde::ser::Error as _;
-
-    struct Boom;
-
-    impl serde::Serialize for Boom {
-        fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
-            Err(S::Error::custom("boom"))
-        }
-    }
-
-    impl outbox_publisher::domain_event::DomainEvent for Boom {
-        fn kind() -> &'static str
-        where
-            Self: Sized,
-        {
-            "boom@v1"
-        }
-
-        fn aggregate_type() -> &'static str
-        where
-            Self: Sized,
-        {
-            "boom"
-        }
-
-        fn aggregate_id(&self) -> Uuid {
-            Uuid::nil()
-        }
-    }
-
-    let (pool, _container) = setup_db().await;
-    let publisher = SqlxPublisher::new();
-
-    let mut tx = pool.begin().await.expect("begin tx");
-    let err = publisher
-        .append(&mut tx, &Boom, &test_ctx())
-        .await
-        .expect_err("expected serialization error");
-    tx.rollback().await.ok();
-
-    assert!(
-        matches!(err, outbox_publisher::error::PublishError::Serialization(_)),
-        "expected Serialization, got {err:?}",
-    );
-}
-
-/// `append_batch` and N successive `append` calls produce equivalent rows
-/// (same columns, same count).
-#[tokio::test]
-async fn append_batch_equivalent_to_individual_appends() {
+async fn append_batch_writes_same_columns_as_individual_appends() {
     let (pool, _container) = setup_db().await;
     let publisher = SqlxPublisher::new();
 
     let ctx = test_ctx();
     let user_ids: Vec<Uuid> = (0..3).map(|_| Uuid::new_v4()).collect();
 
-    // Insert via individual appends.
+    // Individual path.
     let mut tx = pool.begin().await.expect("begin tx");
+    let mut individual_ids = Vec::new();
     for uid in &user_ids {
         let event = UserRegistered {
             user_id: *uid,
             email: format!("{uid}@example.com"),
         };
-        publisher
-            .append(&mut tx, &event, &ctx)
-            .await
-            .expect("append");
+        individual_ids.push(
+            publisher
+                .append(&mut tx, &event, &ctx)
+                .await
+                .expect("append"),
+        );
     }
     tx.commit().await.expect("commit individual");
 
-    // Insert via batch.
+    // Batch path with identical events.
     let batch: Vec<(UserRegistered, EventContext)> = user_ids
         .iter()
         .map(|uid| {
@@ -616,14 +597,78 @@ async fn append_batch_equivalent_to_individual_appends() {
         .expect("batch");
     tx2.commit().await.expect("commit batch");
 
-    // Both inserts produced the same number of rows.
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM outbox_events")
-        .fetch_one(&pool)
-        .await
-        .expect("count");
-    assert_eq!(count, 6); // 3 individual + 3 batch
+    // Fetch the rows for each path, ordered by aggregate_id for stable comparison.
+    let fetch_rows = |ids: Vec<EventId>| {
+        let pool = pool.clone();
+        async move {
+            let id_uuids: Vec<Uuid> = ids.iter().copied().map(Uuid::from).collect();
+            sqlx::query(
+                "SELECT kind, aggregate_type, aggregate_id, payload, metadata, callbacks,
+                        actor_id, correlation_id, causation_id
+                 FROM outbox_events
+                 WHERE event_id = ANY($1)
+                 ORDER BY aggregate_id",
+            )
+            .bind(&id_uuids)
+            .fetch_all(&pool)
+            .await
+            .expect("fetch")
+        }
+    };
 
-    assert_eq!(batch_ids.len(), 3);
+    let individual_rows = fetch_rows(individual_ids).await;
+    let batch_rows = fetch_rows(batch_ids).await;
+
+    assert_eq!(individual_rows.len(), 3);
+    assert_eq!(batch_rows.len(), 3);
+
+    for (a, b) in individual_rows.iter().zip(batch_rows.iter()) {
+        assert_eq!(
+            a.get::<String, _>("kind"),
+            b.get::<String, _>("kind"),
+            "kind mismatch"
+        );
+        assert_eq!(
+            a.get::<String, _>("aggregate_type"),
+            b.get::<String, _>("aggregate_type"),
+            "aggregate_type mismatch"
+        );
+        assert_eq!(
+            a.get::<Uuid, _>("aggregate_id"),
+            b.get::<Uuid, _>("aggregate_id"),
+            "aggregate_id mismatch"
+        );
+        assert_eq!(
+            a.get::<serde_json::Value, _>("payload"),
+            b.get::<serde_json::Value, _>("payload"),
+            "payload mismatch"
+        );
+        assert_eq!(
+            a.get::<serde_json::Value, _>("metadata"),
+            b.get::<serde_json::Value, _>("metadata"),
+            "metadata mismatch"
+        );
+        assert_eq!(
+            a.get::<serde_json::Value, _>("callbacks"),
+            b.get::<serde_json::Value, _>("callbacks"),
+            "callbacks mismatch"
+        );
+        assert_eq!(
+            a.get::<Option<Uuid>, _>("actor_id"),
+            b.get::<Option<Uuid>, _>("actor_id"),
+            "actor_id mismatch"
+        );
+        assert_eq!(
+            a.get::<Option<Uuid>, _>("correlation_id"),
+            b.get::<Option<Uuid>, _>("correlation_id"),
+            "correlation_id mismatch"
+        );
+        assert_eq!(
+            a.get::<Option<Uuid>, _>("causation_id"),
+            b.get::<Option<Uuid>, _>("causation_id"),
+            "causation_id mismatch"
+        );
+    }
 }
 
 /// `append_batch` rollback leaves no rows.

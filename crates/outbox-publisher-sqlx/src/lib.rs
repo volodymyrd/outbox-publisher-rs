@@ -240,3 +240,32 @@ impl SqlxPublisher {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `PublishError::Serialization` is produced when `serde_json::to_value` fails.
+    ///
+    /// This exercises the `From<serde_json::Error>` conversion that backs the `?`
+    /// in `insert` — no database connection required.
+    #[test]
+    fn serialization_error_converts_to_publish_error() {
+        use serde::ser::Error as _;
+
+        struct Boom;
+
+        impl serde::Serialize for Boom {
+            fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+                Err(S::Error::custom("boom"))
+            }
+        }
+
+        let err = serde_json::to_value(Boom).unwrap_err();
+        let publish_err = PublishError::from(err);
+        assert!(
+            matches!(publish_err, PublishError::Serialization(_)),
+            "expected Serialization, got {publish_err:?}",
+        );
+    }
+}
