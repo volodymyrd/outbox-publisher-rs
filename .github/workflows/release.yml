@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  SQLX_OFFLINE: true
+
+jobs:
+  # ── Gate: full CI must pass first ─────────────────────────────────────────
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  # ── Publish to crates.io in dependency order ───────────────────────────────
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: ci
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry + build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      # Publish in dependency order: derive → sqlx adapter → umbrella.
+      # `--no-verify` is safe here because CI (above) already ran the full
+      # test suite including integration tests.
+      - name: Publish outbox-publisher-derive
+        run: cargo publish -p outbox-publisher-derive --no-verify
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      # crates.io index propagation takes a few seconds.
+      - name: Wait for index propagation
+        run: sleep 20
+
+      - name: Publish outbox-publisher-sqlx
+        run: cargo publish -p outbox-publisher-sqlx --no-verify
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for index propagation
+        run: sleep 20
+
+      - name: Publish outbox-publisher
+        run: cargo publish -p outbox-publisher --no-verify
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # ── GitHub Release with changelog ─────────────────────────────────────────
+  github-release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: publish
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

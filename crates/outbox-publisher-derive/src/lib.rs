@@ -1,3 +1,11 @@
+//! Procedural macro crate for [`outbox-publisher`].
+//!
+//! Exposes the `#[derive(DomainEvent)]` macro. Use the re-export from the
+//! umbrella crate rather than depending on this crate directly:
+//!
+//! ```toml
+//! outbox-publisher = { version = "0.1", features = ["derive"] }
+//! ```
 extern crate proc_macro;
 
 use proc_macro::TokenStream;

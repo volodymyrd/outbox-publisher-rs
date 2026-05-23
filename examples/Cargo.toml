@@ -1,0 +1,33 @@
+[package]
+name = "outbox-publisher-examples"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+axum = { workspace = true }
+outbox-publisher = { workspace = true, features = ["derive", "axum"] }
+outbox-publisher-sqlx.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+
+[[example]]
+name = "axum-handler"
+path = "axum-handler.rs"
+
+[[example]]
+name = "webhook-receiver"
+path = "webhook-receiver.rs"
+
+[[example]]
+name = "batch-emit"
+path = "batch-emit.rs"
