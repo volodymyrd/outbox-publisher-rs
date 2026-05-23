@@ -52,18 +52,13 @@ use uuid::Uuid;
 /// The target schema is determined by the connection's `search_path`. To write
 /// to a non-default schema, set `search_path` on the pool or connection before
 /// passing the transaction.
+#[derive(Debug, Clone, Copy, Default)]
 pub struct SqlxPublisher;
 
 impl SqlxPublisher {
     /// Create a new publisher.
     pub fn new() -> Self {
         Self
-    }
-}
-
-impl Default for SqlxPublisher {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
