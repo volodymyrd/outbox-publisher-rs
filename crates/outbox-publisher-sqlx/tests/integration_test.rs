@@ -278,7 +278,7 @@ async fn append_with_id_duplicate_returns_error() {
         .append_with_id(&mut tx2, event_id, &event2, &ctx)
         .await
         .expect_err("expected duplicate error");
-    tx2.rollback().await.ok();
+    tx2.rollback().await.expect("rollback");
 
     assert!(
         matches!(err, outbox_publisher::error::PublishError::DuplicateEventId),
@@ -350,7 +350,7 @@ async fn append_batch_inserts_all_rows() {
     assert_eq!(count, 5);
 }
 
-// ── Finding 6 — rollback test for append_with_id ─────────────────────────────
+// ── Rollback behaviour ───────────────────────────────────────────────────────
 
 /// `append_with_id` rollback leaves no row in the table.
 #[tokio::test]
@@ -380,7 +380,7 @@ async fn append_with_id_rollback_leaves_no_row() {
     assert_eq!(count, 0);
 }
 
-// ── Finding 5 — batch with mixed-NULL optional fields ─────────────────────────
+// ── Optional field handling ──────────────────────────────────────────────────
 
 /// `append_batch` correctly handles a mix of populated and absent optional fields.
 #[tokio::test]
@@ -457,7 +457,7 @@ async fn append_batch_handles_mixed_null_optional_fields() {
     assert_eq!(rows[2].get::<Option<Uuid>, _>("causation_id"), None);
 }
 
-// ── Finding 16 — batch vs individual column equivalence ──────────────────────
+// ── Batch / individual equivalence ───────────────────────────────────────────
 
 /// `append_batch` writes the same column values as N successive `append` calls.
 #[tokio::test]
