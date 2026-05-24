@@ -195,10 +195,8 @@ pub mod axum_support {
     /// # Example
     ///
     /// ```no_run
-    /// use axum::{Router, routing::post, extract::State};
-    /// use outbox_publisher::webhook::{WebhookVerifier, WebhookEnvelope, OutboxWebhook};
+    /// use outbox_publisher::webhook::{WebhookVerifier, OutboxWebhook};
     /// use serde::Deserialize;
-    /// use uuid::Uuid;
     ///
     /// #[derive(Clone)]
     /// struct AppState { verifier: WebhookVerifier }

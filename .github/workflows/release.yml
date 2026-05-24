@@ -45,6 +45,18 @@ jobs:
           # Escape regex metacharacters (dots) for use in grep -E.
           echo "regex=$(printf '%s' "$v" | sed 's/\./\\./g')" >> "$GITHUB_OUTPUT"
 
+      - name: Assert workspace version matches tag
+        env:
+          EXPECTED: ${{ steps.ver.outputs.version }}
+        run: |
+          actual=$(cargo metadata --no-deps --format-version 1 \
+            | python3 -c 'import json,sys; m=json.load(sys.stdin); print(m["packages"][0]["version"])')
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "Tag v$EXPECTED does not match workspace version $actual." >&2
+            echo "Bump workspace.package.version in Cargo.toml and re-tag." >&2
+            exit 1
+          fi
+
       # Dry-run derive first — it has no sibling deps so the crates.io resolver
       # can validate it fully. outbox-publisher and outbox-publisher-sqlx can't
       # be dry-run at this point (their siblings aren't live yet), but they use
@@ -56,8 +68,11 @@ jobs:
       # Publish in dependency order: derive → umbrella → sqlx adapter.
       # outbox-publisher-sqlx depends on outbox-publisher, so the umbrella crate
       # must reach crates.io first.
-      # `--no-verify` is safe here because CI (above) already ran the full
-      # test suite including integration tests.
+      # `--no-verify` is only needed for derive because its sibling crates aren't on
+      # crates.io yet at this point. By the time umbrella and sqlx publish, every
+      # dep they import via path = "..." has already propagated to the registry,
+      # so cargo's tarball-verify build can resolve and compile the packaged
+      # sources end-to-end.
       - name: Publish outbox-publisher-derive
         run: cargo publish -p outbox-publisher-derive --no-verify
         env:
@@ -78,7 +93,7 @@ jobs:
           exit 1
 
       - name: Publish outbox-publisher
-        run: cargo publish -p outbox-publisher --no-verify
+        run: cargo publish -p outbox-publisher
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -97,7 +112,7 @@ jobs:
           exit 1
 
       - name: Publish outbox-publisher-sqlx
-        run: cargo publish -p outbox-publisher-sqlx --no-verify
+        run: cargo publish -p outbox-publisher-sqlx
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -114,6 +129,6 @@ jobs:
           fetch-depth: 0
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
         with:
           generate_release_notes: true
