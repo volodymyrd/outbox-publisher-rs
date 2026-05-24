@@ -8,6 +8,15 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "../../README.md"
+include = [
+    "src/**/*",
+    ".sqlx/**/*",
+    "Cargo.toml",
+    "../../README.md",
+    "../../LICENSE-MIT",
+    "../../LICENSE-APACHE",
+]
 
 [dependencies]
 outbox-publisher.workspace = true

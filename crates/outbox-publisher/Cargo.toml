@@ -8,7 +8,14 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-exclude = ["proptest-regressions/**"]
+readme = "../../README.md"
+include = [
+    "src/**/*",
+    "Cargo.toml",
+    "../../README.md",
+    "../../LICENSE-MIT",
+    "../../LICENSE-APACHE",
+]
 
 [features]
 default = []

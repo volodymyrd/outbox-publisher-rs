@@ -8,6 +8,14 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "../../README.md"
+include = [
+    "src/**/*",
+    "Cargo.toml",
+    "../../README.md",
+    "../../LICENSE-MIT",
+    "../../LICENSE-APACHE",
+]
 
 [lib]
 proc-macro = true
