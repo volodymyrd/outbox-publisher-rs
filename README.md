@@ -55,7 +55,7 @@ tx.commit().await?;   // event and business writes commit together
 
 ```rust
 use axum::{Router, http::StatusCode, routing::post};
-use outbox_publisher::webhook::{WebhookVerifier, axum_support::OutboxWebhook};
+use outbox_publisher::webhook::{WebhookVerifier, OutboxWebhook};
 
 async fn handle(OutboxWebhook(env): OutboxWebhook<UserRegistered>) -> StatusCode {
     println!("welcome email for {}", env.payload.email);

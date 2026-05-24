@@ -196,8 +196,7 @@ pub mod axum_support {
     ///
     /// ```no_run
     /// use axum::{Router, routing::post, extract::State};
-    /// use outbox_publisher::webhook::{WebhookVerifier, WebhookEnvelope};
-    /// use outbox_publisher::webhook::axum_support::OutboxWebhook;
+    /// use outbox_publisher::webhook::{WebhookVerifier, WebhookEnvelope, OutboxWebhook};
     /// use serde::Deserialize;
     /// use uuid::Uuid;
     ///
@@ -224,6 +223,16 @@ pub mod axum_support {
 
     /// Rejection returned when signature verification or body parsing fails.
     pub struct WebhookRejection(pub(crate) VerifyError);
+
+    impl WebhookRejection {
+        /// The underlying verification error.
+        ///
+        /// Useful for emitting custom metrics or structured logs before the
+        /// rejection is converted to an HTTP response.
+        pub fn error(&self) -> &VerifyError {
+            &self.0
+        }
+    }
 
     impl IntoResponse for WebhookRejection {
         fn into_response(self) -> Response {
@@ -273,6 +282,9 @@ pub mod axum_support {
         }
     }
 }
+
+#[cfg(feature = "axum")]
+pub use axum_support::{OutboxWebhook, WebhookRejection};
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -537,7 +549,7 @@ mod axum_tests {
     use tower::ServiceExt;
     use uuid::Uuid;
 
-    use super::axum_support::OutboxWebhook;
+    use super::OutboxWebhook;
     use super::*;
     use signing::sign;
 

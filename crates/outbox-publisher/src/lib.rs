@@ -14,7 +14,7 @@
 //! Define an event, publish it, and receive the webhook:
 //!
 //! ```rust
-//! # use outbox_publisher_derive::DomainEvent;
+//! # use outbox_publisher::DomainEvent;
 //! use serde::{Deserialize, Serialize};
 //! use uuid::Uuid;
 //!
@@ -60,6 +60,9 @@ pub use error::{PublishError, VerifyError};
 pub use event::{EventContext, EventId};
 pub use publisher::Publisher;
 pub use webhook::{WebhookEnvelope, WebhookVerifier};
+
+#[cfg(feature = "axum")]
+pub use webhook::{OutboxWebhook, WebhookRejection};
 
 #[cfg(feature = "derive")]
 pub use outbox_publisher_derive::DomainEvent;

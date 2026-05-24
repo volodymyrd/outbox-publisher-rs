@@ -13,7 +13,7 @@
 
 use anyhow::{Context, Result};
 use axum::{extract::FromRef, http::StatusCode, routing::post, Router};
-use outbox_publisher::webhook::{axum_support::OutboxWebhook, WebhookVerifier};
+use outbox_publisher::webhook::{OutboxWebhook, WebhookVerifier};
 use serde::Deserialize;
 use uuid::Uuid;
 
