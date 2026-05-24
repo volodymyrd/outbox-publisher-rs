@@ -27,12 +27,12 @@
 //!     pub email: String,
 //! }
 //!
-//! // 2. Publish inside your transaction (requires sqlx feature + SqlxPublisher):
+//! // 2. Publish inside your transaction (requires the `outbox-publisher-sqlx` crate):
 //! //
 //! //   state.publisher.append(&mut tx, &event, &ctx).await?;
 //! //   tx.commit().await?;
 //! //
-//! // 3. Receive the webhook (requires axum feature):
+//! // 3. Receive the webhook (requires the `axum` feature):
 //! //
 //! //   async fn handler(OutboxWebhook(env): OutboxWebhook<UserRegistered>) -> StatusCode {
 //! //       println!("got event for {}", env.payload.email);
