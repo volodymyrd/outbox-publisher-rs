@@ -9,7 +9,7 @@
 //! ```
 
 use anyhow::{Context, Result};
-use outbox_publisher::{event::EventContext, publisher::Publisher as _, DomainEvent};
+use outbox_publisher::{DomainEvent, EventContext, Publisher as _};
 use outbox_publisher_sqlx::SqlxPublisher;
 use serde::Serialize;
 use serde_json::json;

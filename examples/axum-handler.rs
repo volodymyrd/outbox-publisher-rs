@@ -17,7 +17,7 @@
 
 use anyhow::{Context, Result};
 use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
-use outbox_publisher::{event::EventContext, DomainEvent};
+use outbox_publisher::{DomainEvent, EventContext};
 use outbox_publisher_sqlx::SqlxPublisher;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -62,7 +62,7 @@ async fn register(
     State(state): State<AppState>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<Json<RegisterResponse>, StatusCode> {
-    use outbox_publisher::publisher::Publisher as _;
+    use outbox_publisher::Publisher as _;
 
     let user_id = Uuid::new_v4();
 

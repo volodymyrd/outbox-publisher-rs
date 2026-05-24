@@ -32,7 +32,7 @@ pub struct UserRegistered {
 ### 2 — Publish inside your transaction
 
 ```rust
-use outbox_publisher::{event::EventContext, publisher::Publisher as _};
+use outbox_publisher::{EventContext, Publisher as _};
 use outbox_publisher_sqlx::SqlxPublisher;
 use serde_json::json;
 

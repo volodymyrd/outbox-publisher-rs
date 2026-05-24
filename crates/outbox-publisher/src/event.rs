@@ -47,7 +47,7 @@ impl std::fmt::Display for EventId {
 /// # Example
 ///
 /// ```
-/// use outbox_publisher::event::EventContext;
+/// use outbox_publisher::EventContext;
 /// use serde_json::{Map, json};
 /// use uuid::Uuid;
 ///

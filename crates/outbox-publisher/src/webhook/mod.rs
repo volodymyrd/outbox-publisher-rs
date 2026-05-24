@@ -154,6 +154,9 @@ impl WebhookVerifier {
     /// Verify the signature and deserialize the body into a [`WebhookEnvelope<E>`].
     ///
     /// Combines [`verify`][Self::verify] with JSON deserialization in one step.
+    /// Metadata is kept as raw `serde_json::Value`. Use
+    /// [`verify_and_parse_with_metadata`][Self::verify_and_parse_with_metadata]
+    /// when your publisher writes a structured metadata schema.
     ///
     /// # Errors
     ///
@@ -166,6 +169,32 @@ impl WebhookVerifier {
     ) -> Result<WebhookEnvelope<E>, VerifyError> {
         self.verify(signature_header, body)?;
         let envelope: WebhookEnvelope<E> = serde_json::from_slice(body)?;
+        Ok(envelope)
+    }
+
+    /// Verify the signature and deserialize the body into a
+    /// [`WebhookEnvelope<E, M>`] with a caller-chosen metadata type.
+    ///
+    /// Use this when your publisher writes a structured metadata schema and you
+    /// want it parsed alongside the payload.
+    /// [`verify_and_parse`][Self::verify_and_parse] keeps metadata as raw
+    /// `serde_json::Value`.
+    ///
+    /// # Errors
+    ///
+    /// All errors from [`verify`][Self::verify], plus
+    /// [`VerifyError::BodyParse`] when the JSON cannot be deserialized.
+    pub fn verify_and_parse_with_metadata<E, M>(
+        &self,
+        signature_header: &str,
+        body: &[u8],
+    ) -> Result<WebhookEnvelope<E, M>, VerifyError>
+    where
+        E: DeserializeOwned,
+        M: DeserializeOwned,
+    {
+        self.verify(signature_header, body)?;
+        let envelope: WebhookEnvelope<E, M> = serde_json::from_slice(body)?;
         Ok(envelope)
     }
 }
@@ -483,6 +512,29 @@ mod tests {
         assert_eq!(e.metadata, json!({"source": "test"}));
         // Allow millisecond-level precision loss in chrono round-trip.
         assert!((e.created_at - created_at).num_milliseconds().abs() < 2);
+    }
+
+    #[test]
+    fn verify_and_parse_with_metadata_happy_path() {
+        #[derive(serde::Deserialize, Debug, PartialEq)]
+        struct Meta {
+            source: String,
+        }
+
+        let payload = json!({ "user_id": Uuid::new_v4(), "email": "c@example.com" });
+        let mut envelope_json = make_envelope_json(payload);
+        envelope_json["metadata"] = json!({"source": "signup"});
+        let body = serde_json::to_vec(&envelope_json).unwrap();
+        let ts = now_ts();
+        let header = sign(SECRET, ts, &body);
+        let verifier = WebhookVerifier::new(SECRET.to_vec());
+
+        let envelope: WebhookEnvelope<UserRegistered, Meta> = verifier
+            .verify_and_parse_with_metadata(&header, &body)
+            .unwrap();
+
+        assert_eq!(envelope.kind, "user.registered@v1");
+        assert_eq!(envelope.metadata.source, "signup");
     }
 
     #[test]
