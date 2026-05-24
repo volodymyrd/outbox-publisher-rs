@@ -36,9 +36,10 @@ use signing::{parse_t_field, parse_v1_decoded, verify_decoded};
 ///
 /// Field names and types are byte-identical to the dispatcher's `build_body`
 /// (§6.1 of the dispatcher TDD). Generic over `E` — the event payload type
-/// stored in [`payload`][WebhookEnvelope::payload].
+/// stored in [`payload`][WebhookEnvelope::payload] — and optionally over `M`
+/// (metadata type, defaults to `serde_json::Value` for backwards compatibility).
 #[derive(Debug, Clone, Deserialize)]
-pub struct WebhookEnvelope<E> {
+pub struct WebhookEnvelope<E, M = serde_json::Value> {
     /// Dispatcher-internal delivery row identifier.
     pub delivery_id: i64,
     /// Event identifier (UUID of the outbox row).
@@ -56,7 +57,7 @@ pub struct WebhookEnvelope<E> {
     /// Typed event payload — deserialized from the `payload` JSON field.
     pub payload: E,
     /// Arbitrary structured metadata from the publisher's `EventContext`.
-    pub metadata: serde_json::Value,
+    pub metadata: M,
     /// Actor that triggered the event, if set.
     pub actor_id: Option<Uuid>,
     /// Correlation identifier, if set.
@@ -220,7 +221,7 @@ pub mod axum_support {
     pub struct OutboxWebhook<E>(pub WebhookEnvelope<E>);
 
     /// Rejection returned when signature verification or body parsing fails.
-    pub struct WebhookRejection(pub(crate) VerifyError);
+    pub struct WebhookRejection(pub VerifyError);
 
     impl WebhookRejection {
         /// The underlying verification error.

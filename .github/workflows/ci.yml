@@ -119,4 +119,4 @@ jobs:
         run: psql "$DATABASE_URL" -f tests/fixtures/0001_initial_schema.sql
 
       - name: Assert .sqlx is up-to-date
-        run: cargo sqlx prepare --workspace --check
+        run: cargo sqlx prepare -p outbox-publisher-sqlx --check -- --tests

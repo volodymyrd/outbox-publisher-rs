@@ -49,10 +49,9 @@ jobs:
         env:
           EXPECTED: ${{ steps.ver.outputs.version }}
         run: |
-          actual=$(cargo metadata --no-deps --format-version 1 \
-            | python3 -c 'import json,sys; m=json.load(sys.stdin); print(m["packages"][0]["version"])')
+          actual=$(cargo pkgid -p outbox-publisher | awk -F'#' '{print $NF}')
           if [ "$actual" != "$EXPECTED" ]; then
-            echo "Tag v$EXPECTED does not match workspace version $actual." >&2
+            echo "Tag v$EXPECTED does not match outbox-publisher version $actual." >&2
             echo "Bump workspace.package.version in Cargo.toml and re-tag." >&2
             exit 1
           fi

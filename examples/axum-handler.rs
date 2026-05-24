@@ -22,6 +22,7 @@ use outbox_publisher_sqlx::SqlxPublisher;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
+use std::sync::Arc;
 use uuid::Uuid;
 
 // ── Event definition ──────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ struct UserRegistered {
 struct AppState {
     pool: PgPool,
     publisher: SqlxPublisher,
-    webhook_url: String,
+    webhook_url: Arc<str>,
 }
 
 // ── Request / response types ──────────────────────────────────────────────────
@@ -124,7 +125,7 @@ async fn main() -> Result<()> {
     let state = AppState {
         pool,
         publisher: SqlxPublisher::new(),
-        webhook_url,
+        webhook_url: Arc::from(webhook_url.as_str()),
     };
 
     let app = Router::new()

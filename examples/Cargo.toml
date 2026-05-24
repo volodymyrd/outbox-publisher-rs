@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
+autolib = false
 
 [dependencies]
 anyhow.workspace = true

@@ -3,3 +3,5 @@
 .env
 .env.toml
 /target
+# proptest saved-counterexample cache — local dev artefact only
+proptest-regressions/
