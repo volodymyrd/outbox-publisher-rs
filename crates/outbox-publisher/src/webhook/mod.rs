@@ -36,9 +36,10 @@ use signing::{parse_t_field, parse_v1_decoded, verify_decoded};
 ///
 /// Field names and types are byte-identical to the dispatcher's `build_body`
 /// (§6.1 of the dispatcher TDD). Generic over `E` — the event payload type
-/// stored in [`payload`][WebhookEnvelope::payload].
+/// stored in [`payload`][WebhookEnvelope::payload] — and optionally over `M`
+/// (metadata type, defaults to `serde_json::Value` for backwards compatibility).
 #[derive(Debug, Clone, Deserialize)]
-pub struct WebhookEnvelope<E> {
+pub struct WebhookEnvelope<E, M = serde_json::Value> {
     /// Dispatcher-internal delivery row identifier.
     pub delivery_id: i64,
     /// Event identifier (UUID of the outbox row).
@@ -56,7 +57,7 @@ pub struct WebhookEnvelope<E> {
     /// Typed event payload — deserialized from the `payload` JSON field.
     pub payload: E,
     /// Arbitrary structured metadata from the publisher's `EventContext`.
-    pub metadata: serde_json::Value,
+    pub metadata: M,
     /// Actor that triggered the event, if set.
     pub actor_id: Option<Uuid>,
     /// Correlation identifier, if set.
@@ -153,6 +154,9 @@ impl WebhookVerifier {
     /// Verify the signature and deserialize the body into a [`WebhookEnvelope<E>`].
     ///
     /// Combines [`verify`][Self::verify] with JSON deserialization in one step.
+    /// Metadata is kept as raw `serde_json::Value`. Use
+    /// [`verify_and_parse_with_metadata`][Self::verify_and_parse_with_metadata]
+    /// when your publisher writes a structured metadata schema.
     ///
     /// # Errors
     ///
@@ -167,12 +171,38 @@ impl WebhookVerifier {
         let envelope: WebhookEnvelope<E> = serde_json::from_slice(body)?;
         Ok(envelope)
     }
+
+    /// Verify the signature and deserialize the body into a
+    /// [`WebhookEnvelope<E, M>`] with a caller-chosen metadata type.
+    ///
+    /// Use this when your publisher writes a structured metadata schema and you
+    /// want it parsed alongside the payload.
+    /// [`verify_and_parse`][Self::verify_and_parse] keeps metadata as raw
+    /// `serde_json::Value`.
+    ///
+    /// # Errors
+    ///
+    /// All errors from [`verify`][Self::verify], plus
+    /// [`VerifyError::BodyParse`] when the JSON cannot be deserialized.
+    pub fn verify_and_parse_with_metadata<E, M>(
+        &self,
+        signature_header: &str,
+        body: &[u8],
+    ) -> Result<WebhookEnvelope<E, M>, VerifyError>
+    where
+        E: DeserializeOwned,
+        M: DeserializeOwned,
+    {
+        self.verify(signature_header, body)?;
+        let envelope: WebhookEnvelope<E, M> = serde_json::from_slice(body)?;
+        Ok(envelope)
+    }
 }
 
 // ── Axum extractor ────────────────────────────────────────────────────────────
 
 #[cfg(feature = "axum")]
-pub mod axum_support {
+mod axum_support {
     use axum::{
         body::Bytes,
         extract::{FromRef, FromRequest, Request},
@@ -194,11 +224,8 @@ pub mod axum_support {
     /// # Example
     ///
     /// ```no_run
-    /// use axum::{Router, routing::post, extract::State};
-    /// use outbox_publisher::webhook::{WebhookVerifier, WebhookEnvelope};
-    /// use outbox_publisher::webhook::axum_support::OutboxWebhook;
+    /// use outbox_publisher::webhook::{WebhookVerifier, OutboxWebhook};
     /// use serde::Deserialize;
-    /// use uuid::Uuid;
     ///
     /// #[derive(Clone)]
     /// struct AppState { verifier: WebhookVerifier }
@@ -222,7 +249,17 @@ pub mod axum_support {
     pub struct OutboxWebhook<E>(pub WebhookEnvelope<E>);
 
     /// Rejection returned when signature verification or body parsing fails.
-    pub struct WebhookRejection(pub(crate) VerifyError);
+    pub struct WebhookRejection(pub VerifyError);
+
+    impl WebhookRejection {
+        /// The underlying verification error.
+        ///
+        /// Useful for emitting custom metrics or structured logs before the
+        /// rejection is converted to an HTTP response.
+        pub fn error(&self) -> &VerifyError {
+            &self.0
+        }
+    }
 
     impl IntoResponse for WebhookRejection {
         fn into_response(self) -> Response {
@@ -252,12 +289,13 @@ pub mod axum_support {
         async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
             let verifier = WebhookVerifier::from_ref(state);
 
-            let signature = req
-                .headers()
-                .get("x-outbox-signature")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("")
-                .to_owned();
+            let signature = match req.headers().get("x-outbox-signature") {
+                None => return Err(WebhookRejection(VerifyError::MissingHeader)),
+                Some(v) => v
+                    .to_str()
+                    .map_err(|_| WebhookRejection(VerifyError::MalformedHeader))?
+                    .to_owned(),
+            };
 
             let body = Bytes::from_request(req, state)
                 .await
@@ -271,6 +309,9 @@ pub mod axum_support {
         }
     }
 }
+
+#[cfg(feature = "axum")]
+pub use axum_support::{OutboxWebhook, WebhookRejection};
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -473,6 +514,29 @@ mod tests {
     }
 
     #[test]
+    fn verify_and_parse_with_metadata_happy_path() {
+        #[derive(serde::Deserialize, Debug, PartialEq)]
+        struct Meta {
+            source: String,
+        }
+
+        let payload = json!({ "user_id": Uuid::new_v4(), "email": "c@example.com" });
+        let mut envelope_json = make_envelope_json(payload);
+        envelope_json["metadata"] = json!({"source": "signup"});
+        let body = serde_json::to_vec(&envelope_json).unwrap();
+        let ts = now_ts();
+        let header = sign(SECRET, ts, &body);
+        let verifier = WebhookVerifier::new(SECRET.to_vec());
+
+        let envelope: WebhookEnvelope<UserRegistered, Meta> = verifier
+            .verify_and_parse_with_metadata(&header, &body)
+            .unwrap();
+
+        assert_eq!(envelope.kind, "user.registered@v1");
+        assert_eq!(envelope.metadata.source, "signup");
+    }
+
+    #[test]
     fn verify_and_parse_returns_body_parse_on_bad_json() {
         let ts = now_ts();
         let body = b"not-json";
@@ -535,7 +599,7 @@ mod axum_tests {
     use tower::ServiceExt;
     use uuid::Uuid;
 
-    use super::axum_support::OutboxWebhook;
+    use super::OutboxWebhook;
     use super::*;
     use signing::sign;
 

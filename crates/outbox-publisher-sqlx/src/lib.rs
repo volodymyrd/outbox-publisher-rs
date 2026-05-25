@@ -7,8 +7,7 @@
 //!
 //! ```no_run
 //! use outbox_publisher_sqlx::SqlxPublisher;
-//! use outbox_publisher::publisher::Publisher;
-//! use outbox_publisher::event::EventContext;
+//! use outbox_publisher::{EventContext, Publisher};
 //! use serde_json::json;
 //! # use serde::Serialize;
 //! # use outbox_publisher::domain_event::DomainEvent;
@@ -33,6 +32,7 @@
 //! # Ok(())
 //! # }
 //! ```
+#![deny(missing_docs)]
 
 use outbox_publisher::{
     domain_event::DomainEvent,

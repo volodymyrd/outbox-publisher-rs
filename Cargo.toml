@@ -4,26 +4,27 @@ members = [
     "crates/outbox-publisher",
     "crates/outbox-publisher-derive",
     "crates/outbox-publisher-sqlx",
+    "examples",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Volodymyr Dobrovolskyi"]
+authors = ["Volodymyr Dotsenko"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/volodymyrd/outbox-publisher-rs"
 
 [workspace.dependencies]
+anyhow = "1"
 axum = { version = "0.8", features = ["json"] }
-bytes = "1"
 chrono = { version = "0.4", features = ["serde"] }
 hex = "0.4"
 hmac = "0.13"
-http = "1"
 
 # Internal crates
 outbox-publisher = { path = "crates/outbox-publisher", version = "0.1.0" }
 outbox-publisher-derive = { path = "crates/outbox-publisher-derive", version = "0.1.0" }
+outbox-publisher-sqlx = { path = "crates/outbox-publisher-sqlx", version = "0.1.0" }
 proc-macro2 = "1"
 proptest = "1"
 quote = "1"
@@ -38,4 +39,5 @@ thiserror = "2"
 tokio = { version = "1.20", features = ["rt-multi-thread", "macros"] }
 tower = { version = "0.5", features = ["util"] }
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4", "serde"] }

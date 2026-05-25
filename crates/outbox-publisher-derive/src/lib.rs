@@ -1,3 +1,12 @@
+//! Procedural macro crate for [`outbox-publisher`].
+//!
+//! Exposes the `#[derive(DomainEvent)]` macro. Use the re-export from the
+//! umbrella crate rather than depending on this crate directly:
+//!
+//! ```toml
+//! outbox-publisher = { version = "0.1", features = ["derive"] }
+//! ```
+#![deny(missing_docs)]
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
@@ -26,9 +35,14 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Lit, Type, TypePath};
 ///
 /// ## Example
 ///
-/// ```rust
-/// use outbox_publisher_derive::DomainEvent;
-/// use outbox_publisher::domain_event::DomainEvent;
+/// Use the re-export from the umbrella crate (not this crate directly):
+///
+/// ```toml
+/// outbox-publisher = { version = "0.1", features = ["derive"] }
+/// ```
+///
+/// ```rust,ignore
+/// use outbox_publisher::DomainEvent;
 /// use uuid::Uuid;
 ///
 /// #[derive(DomainEvent)]
@@ -39,10 +53,8 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Lit, Type, TypePath};
 ///     pub email: String,
 /// }
 ///
-/// let ev = UserRegistered { user_id: Uuid::nil(), email: "a@b.com".into() };
 /// assert_eq!(UserRegistered::kind(), "user.registered@v1");
 /// assert_eq!(UserRegistered::aggregate_type(), "user");
-/// assert_eq!(ev.aggregate_id(), Uuid::nil());
 /// ```
 #[proc_macro_derive(DomainEvent, attributes(event))]
 pub fn derive_domain_event(input: TokenStream) -> TokenStream {

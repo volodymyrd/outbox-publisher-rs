@@ -6,10 +6,6 @@
 
 Design document: `../TDDs/05-outbox-publisher-tdd.md`. The step-by-step build plan lives in §12 of that document — it is the source of truth for what to do next.
 
-## Status
-
-Phase 1 is implemented: workspace, core types, `DomainEvent`/`Publisher` traits, and the `#[derive(DomainEvent)]` proc-macro all live under `crates/`. Phase 2 (`SqlxPublisher`) and Phase 3 (webhook verification) are next per TDD §12.
-
 ## Workspace layout (target — established by Step 1.1)
 
 ```
@@ -19,7 +15,7 @@ outbox-publisher-rs/
 ├── crates/
 │   ├── outbox-publisher/            # umbrella crate (published to crates.io)
 │   │   ├── src/
-│   │   │   ├── lib.rs               # re-exports per feature flags (sqlx, derive, axum)
+│   │   │   ├── lib.rs               # re-exports per feature flags (derive, axum)
 │   │   │   ├── domain_event.rs      # DomainEvent trait
 │   │   │   ├── event.rs             # EventContext, EventId
 │   │   │   ├── publisher.rs         # Publisher trait with Tx<'a> GAT
@@ -44,7 +40,7 @@ outbox-publisher-rs/
 └── README.md
 ```
 
-Most consumers depend only on `outbox-publisher = { version = "1", features = ["sqlx", "derive", "axum"] }`. The sub-crates are split so users on a different database driver can pull just the umbrella crate without the SQLx transitive deps.
+Most consumers depend on `outbox-publisher = { version = "1", features = ["derive", "axum"] }` together with `outbox-publisher-sqlx = { version = "1" }`. The sub-crates are split so users on a different database driver can pull just the umbrella crate without the SQLx transitive deps.
 
 ## Mandatory After Every Code Change
 
@@ -69,7 +65,7 @@ cargo sort --workspace
 If a sqlx query macro was added or changed:
 
 ```bash
-DATABASE_URL=postgres://outbox:outbox@localhost:5434/outbox_dispatcher cargo sqlx prepare --workspace
+(cd crates/outbox-publisher-sqlx && DATABASE_URL=postgres://outbox:outbox@localhost:5434/outbox_dispatcher cargo sqlx prepare -- --tests)
 ```
 
 ## Key source files (target)
@@ -91,15 +87,15 @@ DATABASE_URL=postgres://outbox:outbox@localhost:5434/outbox_dispatcher cargo sql
 The publisher writes to `outbox_events` but **never** owns the schema. The dispatcher's migration is the single source of truth.
 
 - `tests/fixtures/0001_initial_schema.sql` is a byte-for-byte copy of `outbox-dispatcher/migrations/0001_initial_schema.sql`. Do not edit it locally.
-- Re-copy whenever the dispatcher bumps the schema. The cross-language interop test (Step 4.4 in TDD §12) is what catches drift in CI once the dispatcher's `v1.0.0` image is published.
+- Re-copy whenever the dispatcher bumps the schema. The cross-language interop test is what catches drift in CI once the dispatcher's `v1.0.0` image is published.
 - Production deployments rely on the dispatcher having migrated the database before the publisher writes its first row.
 
 ## sqlx offline mode
 
-The `.sqlx/` directory contains cached query metadata and is checked into version control. Builds without `DATABASE_URL` use it automatically (`SQLX_OFFLINE=true`). Regenerate after any sqlx query macro change:
+The `crates/outbox-publisher-sqlx/.sqlx/` directory contains cached query metadata and is checked into version control. Builds without `DATABASE_URL` use it automatically (`SQLX_OFFLINE=true`). Regenerate after any sqlx query macro change:
 
 ```bash
-DATABASE_URL=postgres://outbox:outbox@localhost:5434/outbox_dispatcher cargo sqlx prepare --workspace
+(cd crates/outbox-publisher-sqlx && DATABASE_URL=postgres://outbox:outbox@localhost:5434/outbox_dispatcher cargo sqlx prepare -- --tests)
 ```
 
 ## Integration tests
@@ -110,22 +106,11 @@ Tests in `crates/outbox-publisher-sqlx/tests/` use `testcontainers` to spin up a
 cargo test --test '*'
 ```
 
-## Implementation phases
-
-See `TDDs/05-outbox-publisher-tdd.md` §12 for the PR-sized step-by-step plan. Summary:
-
-| Phase | Status   | Description                                                                       |
-|-------|----------|-----------------------------------------------------------------------------------|
-| 1     | DONE     | Workspace, core types, `DomainEvent` + `Publisher` traits, derive macro           |
-| 2     | TODO     | `SqlxPublisher`; `append`, `append_with_id`, `append_batch`                       |
-| 3     | TODO     | `WebhookVerifier`, `WebhookEnvelope`, constant-time verify, axum extractor        |
-| 4     | TODO     | Examples, docs, CI, cross-language interop (blocked on dispatcher v1.0.0), publish |
-
 ## Key design notes
 
 - **Schema is not owned here.** The publisher only INSERTs into `outbox_events`. No migrations, no DDL — the dispatcher owns those.
 - **Atomicity through the caller's transaction.** `Publisher::append(&mut tx, ...)` takes the caller's `sqlx::Transaction`. The library never commits or rolls back; the application is responsible for the transaction lifecycle.
-- **Port, don't depend.** `crates/outbox-publisher/src/webhook/signing.rs` is copied from `outbox-dispatcher/crates/http-callback/src/signing.rs`. The cross-language interop test (Step 4.4) catches drift. Resist creating an upstream dependency on `outbox-dispatcher-core` — that crate is not on crates.io (deferred to dispatcher v1.1) and pulling it would couple the publisher to the binary's release cadence.
+- **Port, don't depend.** `crates/outbox-publisher/src/webhook/signing.rs` is copied from `outbox-dispatcher/crates/http-callback/src/signing.rs`. The cross-language interop test catches drift. Resist creating an upstream dependency on `outbox-dispatcher-core` — that crate is not on crates.io (deferred to dispatcher v1.1) and pulling it would couple the publisher to the binary's release cadence.
 - **HMAC body bytes**: feed the raw payload to HMAC via `mac.update(body)`. Never `String::from_utf8_lossy(body)` (mutates non-UTF-8 with U+FFFD) or `format!("{ts}.{body}")` (allocates the full payload). Stream `format!("{ts}.")` then `body`.
 - **Constant-time verify**: use `Mac::verify_slice` or `subtle::ConstantTimeEq` on decoded digests — never `==` on hex strings. The dispatcher's `verify_rejects_single_byte_flip` test is mirrored on this side via proptest.
 - **`Publisher` trait is generic over `Tx<'a>`** (associated GAT). Applications using a different database driver implement the trait themselves; the umbrella crate ships only the SQLx impl.
@@ -170,6 +155,6 @@ See `TDDs/05-outbox-publisher-tdd.md` §12 for the PR-sized step-by-step plan. S
 
 - Unit tests use hand-rolled mocks for the `Publisher` trait — `mockall`'s `#[automock]` does not support GAT-bearing traits (`type Tx<'a>`). See `tests/publisher_mock_test.rs` for the reference pattern.
 - Integration tests use `testcontainers` Postgres with the read-only schema fixture.
-- Cross-language interop tests (Phase 4.4) pull `ghcr.io/volodymyrd/outbox-dispatcher:1.0.0` and exercise publisher → dispatcher → receiver end-to-end.
+- Cross-language interop tests pull `ghcr.io/volodymyrd/outbox-dispatcher:1.0.0` and exercise publisher → dispatcher → receiver end-to-end.
 - Target >90% coverage per module.
 - Test both happy path AND all error branches.
