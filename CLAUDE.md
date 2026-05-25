@@ -75,7 +75,7 @@ cargo sort --workspace
 If a sqlx query macro was added or changed:
 
 ```bash
-DATABASE_URL=postgres://outbox:outbox@localhost:5434/outbox_dispatcher cargo sqlx prepare -p outbox-publisher-sqlx -- --tests
+(cd crates/outbox-publisher-sqlx && DATABASE_URL=postgres://outbox:outbox@localhost:5434/outbox_dispatcher cargo sqlx prepare -- --tests)
 ```
 
 ## Key source files (target)
@@ -105,7 +105,7 @@ The publisher writes to `outbox_events` but **never** owns the schema. The dispa
 The `crates/outbox-publisher-sqlx/.sqlx/` directory contains cached query metadata and is checked into version control. Builds without `DATABASE_URL` use it automatically (`SQLX_OFFLINE=true`). Regenerate after any sqlx query macro change:
 
 ```bash
-DATABASE_URL=postgres://outbox:outbox@localhost:5434/outbox_dispatcher cargo sqlx prepare -p outbox-publisher-sqlx -- --tests
+(cd crates/outbox-publisher-sqlx && DATABASE_URL=postgres://outbox:outbox@localhost:5434/outbox_dispatcher cargo sqlx prepare -- --tests)
 ```
 
 ## Integration tests
