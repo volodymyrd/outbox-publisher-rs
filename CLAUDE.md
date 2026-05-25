@@ -6,17 +6,6 @@
 
 Design document: `../TDDs/05-outbox-publisher-tdd.md`. The step-by-step build plan lives in §12 of that document — it is the source of truth for what to do next.
 
-## Status
-
-Phases 1–4 are implemented and in review on PR #5 (branch `phase4`):
-
-- **Phase 1** — workspace, core types, `DomainEvent`/`Publisher` traits, `#[derive(DomainEvent)]` proc-macro.
-- **Phase 2** — `SqlxPublisher` with `append`, `append_with_id`, `append_batch` (UNNEST single round-trip); testcontainers integration tests.
-- **Phase 3** — `WebhookVerifier` with two-sided drift tolerance and redacting `Debug`, `WebhookEnvelope<E>`, constant-time HMAC via `Mac::verify_slice` + proptest single-byte-flip coverage, and the `axum` extractor (`OutboxWebhook<E>`, `WebhookRejection` with `400`/`401`/`422` mapping).
-- **Phase 4** — CI (`.github/workflows/ci.yml`, `release.yml`), examples (`axum-handler`, `webhook-receiver`, `batch-emit`), rustdoc (`#![deny(missing_docs)]`, crate-level quick-starts), `LICENSE-MIT`/`LICENSE-APACHE`, crates.io metadata (`readme`, `include`, `description`), `proptest-regressions/` excluded from tarball. Cross-language interop (step 4.4) remains blocked on `ghcr.io/volodymyrd/outbox-dispatcher:1.0.0`.
-
-**Next steps after merge**: tag `v0.1.0` to trigger `release.yml` (publish to crates.io) once the dispatcher v1.0.0 image is available for step 4.4.
-
 ## Workspace layout (target — established by Step 1.1)
 
 ```
@@ -98,7 +87,7 @@ If a sqlx query macro was added or changed:
 The publisher writes to `outbox_events` but **never** owns the schema. The dispatcher's migration is the single source of truth.
 
 - `tests/fixtures/0001_initial_schema.sql` is a byte-for-byte copy of `outbox-dispatcher/migrations/0001_initial_schema.sql`. Do not edit it locally.
-- Re-copy whenever the dispatcher bumps the schema. The cross-language interop test (Step 4.4 in TDD §12) is what catches drift in CI once the dispatcher's `v1.0.0` image is published.
+- Re-copy whenever the dispatcher bumps the schema. The cross-language interop test is what catches drift in CI once the dispatcher's `v1.0.0` image is published.
 - Production deployments rely on the dispatcher having migrated the database before the publisher writes its first row.
 
 ## sqlx offline mode
@@ -117,22 +106,11 @@ Tests in `crates/outbox-publisher-sqlx/tests/` use `testcontainers` to spin up a
 cargo test --test '*'
 ```
 
-## Implementation phases
-
-See `TDDs/05-outbox-publisher-tdd.md` §12 for the PR-sized step-by-step plan. Summary:
-
-| Phase | Status   | Description                                                                       |
-|-------|----------|-----------------------------------------------------------------------------------|
-| 1     | DONE     | Workspace, core types, `DomainEvent` + `Publisher` traits, derive macro           |
-| 2     | DONE     | `SqlxPublisher`; `append`, `append_with_id`, `append_batch`                       |
-| 3     | DONE     | `WebhookVerifier`, `WebhookEnvelope`, constant-time verify, axum extractor        |
-| 4     | DONE     | CI (4.3), examples (4.1), docs (4.2), crates.io publish (4.5); cross-language interop (4.4) blocked on dispatcher v1.0.0 |
-
 ## Key design notes
 
 - **Schema is not owned here.** The publisher only INSERTs into `outbox_events`. No migrations, no DDL — the dispatcher owns those.
 - **Atomicity through the caller's transaction.** `Publisher::append(&mut tx, ...)` takes the caller's `sqlx::Transaction`. The library never commits or rolls back; the application is responsible for the transaction lifecycle.
-- **Port, don't depend.** `crates/outbox-publisher/src/webhook/signing.rs` is copied from `outbox-dispatcher/crates/http-callback/src/signing.rs`. The cross-language interop test (Step 4.4) catches drift. Resist creating an upstream dependency on `outbox-dispatcher-core` — that crate is not on crates.io (deferred to dispatcher v1.1) and pulling it would couple the publisher to the binary's release cadence.
+- **Port, don't depend.** `crates/outbox-publisher/src/webhook/signing.rs` is copied from `outbox-dispatcher/crates/http-callback/src/signing.rs`. The cross-language interop test catches drift. Resist creating an upstream dependency on `outbox-dispatcher-core` — that crate is not on crates.io (deferred to dispatcher v1.1) and pulling it would couple the publisher to the binary's release cadence.
 - **HMAC body bytes**: feed the raw payload to HMAC via `mac.update(body)`. Never `String::from_utf8_lossy(body)` (mutates non-UTF-8 with U+FFFD) or `format!("{ts}.{body}")` (allocates the full payload). Stream `format!("{ts}.")` then `body`.
 - **Constant-time verify**: use `Mac::verify_slice` or `subtle::ConstantTimeEq` on decoded digests — never `==` on hex strings. The dispatcher's `verify_rejects_single_byte_flip` test is mirrored on this side via proptest.
 - **`Publisher` trait is generic over `Tx<'a>`** (associated GAT). Applications using a different database driver implement the trait themselves; the umbrella crate ships only the SQLx impl.
@@ -177,6 +155,6 @@ See `TDDs/05-outbox-publisher-tdd.md` §12 for the PR-sized step-by-step plan. S
 
 - Unit tests use hand-rolled mocks for the `Publisher` trait — `mockall`'s `#[automock]` does not support GAT-bearing traits (`type Tx<'a>`). See `tests/publisher_mock_test.rs` for the reference pattern.
 - Integration tests use `testcontainers` Postgres with the read-only schema fixture.
-- Cross-language interop tests (Phase 4.4) pull `ghcr.io/volodymyrd/outbox-dispatcher:1.0.0` and exercise publisher → dispatcher → receiver end-to-end.
+- Cross-language interop tests pull `ghcr.io/volodymyrd/outbox-dispatcher:1.0.0` and exercise publisher → dispatcher → receiver end-to-end.
 - Target >90% coverage per module.
 - Test both happy path AND all error branches.
