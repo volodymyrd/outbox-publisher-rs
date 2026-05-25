@@ -201,9 +201,8 @@ impl WebhookVerifier {
 
 // ── Axum extractor ────────────────────────────────────────────────────────────
 
-/// Axum extractor and rejection types for webhook endpoints.
 #[cfg(feature = "axum")]
-pub mod axum_support {
+mod axum_support {
     use axum::{
         body::Bytes,
         extract::{FromRef, FromRequest, Request},

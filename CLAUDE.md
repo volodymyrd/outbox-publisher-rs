@@ -8,13 +8,14 @@ Design document: `../TDDs/05-outbox-publisher-tdd.md`. The step-by-step build pl
 
 ## Status
 
-Phases 1–3 are implemented and merged on `main`:
+Phases 1–4 are implemented and in review on PR #5 (branch `phase4`):
 
 - **Phase 1** — workspace, core types, `DomainEvent`/`Publisher` traits, `#[derive(DomainEvent)]` proc-macro.
 - **Phase 2** — `SqlxPublisher` with `append`, `append_with_id`, `append_batch` (UNNEST single round-trip); testcontainers integration tests.
 - **Phase 3** — `WebhookVerifier` with two-sided drift tolerance and redacting `Debug`, `WebhookEnvelope<E>`, constant-time HMAC via `Mac::verify_slice` + proptest single-byte-flip coverage, and the `axum` extractor (`OutboxWebhook<E>`, `WebhookRejection` with `400`/`401`/`422` mapping).
+- **Phase 4** — CI (`.github/workflows/ci.yml`, `release.yml`), examples (`axum-handler`, `webhook-receiver`, `batch-emit`), rustdoc (`#![deny(missing_docs)]`, crate-level quick-starts), `LICENSE-MIT`/`LICENSE-APACHE`, crates.io metadata (`readme`, `include`, `description`), `proptest-regressions/` excluded from tarball. Cross-language interop (step 4.4) remains blocked on `ghcr.io/volodymyrd/outbox-dispatcher:1.0.0`.
 
-**Phase 4 (Distribution) is next** per TDD §12. Recommended order: `4.3 (CI) → 4.1 (examples) → 4.2 (docs) → 4.5 dry-run → 4.4 (cross-language interop, blocked on dispatcher v1.0.0 image) → 4.5 (real release)`.
+**Next steps after merge**: tag `v0.1.0` to trigger `release.yml` (publish to crates.io) once the dispatcher v1.0.0 image is available for step 4.4.
 
 ## Workspace layout (target — established by Step 1.1)
 
@@ -125,7 +126,7 @@ See `TDDs/05-outbox-publisher-tdd.md` §12 for the PR-sized step-by-step plan. S
 | 1     | DONE     | Workspace, core types, `DomainEvent` + `Publisher` traits, derive macro           |
 | 2     | DONE     | `SqlxPublisher`; `append`, `append_with_id`, `append_batch`                       |
 | 3     | DONE     | `WebhookVerifier`, `WebhookEnvelope`, constant-time verify, axum extractor        |
-| 4     | TODO     | CI (4.3), examples (4.1), docs (4.2), crates.io publish (4.5); cross-language interop (4.4) blocked on dispatcher v1.0.0 |
+| 4     | DONE     | CI (4.3), examples (4.1), docs (4.2), crates.io publish (4.5); cross-language interop (4.4) blocked on dispatcher v1.0.0 |
 
 ## Key design notes
 
